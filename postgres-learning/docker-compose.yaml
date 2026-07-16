@@ -1,0 +1,35 @@
+services:
+  primary-db:
+    image: postgres:18
+    container_name: primary-db
+    hostname: primary-db
+    environment:
+      POSTGRES_USER: prPostgres
+      POSTGRES_PASSWORD: p@sswoord123
+      POSTGRES_DB: replication_lab
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/primary:/var/lib/postgresql
+    networks:
+      - pg-net
+    restart: unless-stopped
+
+  standby-db:
+    image: postgres:18
+    container_name: standby-db
+    hostname: standby-db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./data/standby:/var/lib/postgresql
+    networks:
+      - pg-net
+    restart: unless-stopped
+    profiles:
+      - standby
+
+networks:
+  pg-net:
+    driver: bridge
+    name: pg-net
