@@ -425,3 +425,231 @@ Example:
 
 ## References:
 - [Medium - PostgreSQL Architecture](https://medium.com/@sumeet.k.shukla/postgresql-architecture-6df259dc1145)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 6. Write-Ahead Logging (WAL)
+
+- Why WAL exists
+- WAL vs Data Files
+- WAL Record
+- WAL Segment
+- WAL Directory (`pg_wal`)
+- WAL Lifecycle
+- WAL Recycling
+- Checkpoint
+- Crash Recovery
+
+---
+
+## 7. Streaming Replication
+
+- Primary
+- Standby
+- Read-only Standby
+- Streaming Replication
+- Physical Replication
+- Asynchronous Replication
+- WAL Shipping
+- WAL Streaming
+- WAL Sender
+- WAL Receiver
+
+---
+
+## 8. Log Sequence Number (LSN)
+
+- What is LSN
+- Why LSN exists
+- `pg_current_wal_lsn()`
+- `pg_last_wal_replay_lsn()`
+- `pg_wal_lsn_diff()`
+- Measuring Replication Lag
+
+---
+
+## 9. Replication Slots
+
+- What is a Replication Slot
+- Physical Replication Slot
+- Logical Replication Slot (future)
+- Slot Metadata
+- `pg_replslot`
+- Slot vs WAL
+- Slowest Standby Rule
+- Disk Full Risk
+
+---
+
+## 10. Base Backup
+
+- `pg_basebackup`
+- Full Cluster Copy
+- Consistent Backup
+- Why it runs only once
+- Why it needs a replication role
+- Why it uses the replication protocol
+
+### Important Flags
+
+- `-D`
+- `-R`
+- `-X stream`
+- `-P`
+
+---
+
+## 11. Standby Initialization
+
+- `standby.signal`
+- `primary_conninfo`
+- Standby Startup Sequence
+- Recovery Mode
+- `pg_is_in_recovery()`
+
+---
+
+## 12. Replication Connection Flow
+
+```text
+Standby
+      │
+      │ TCP
+      ▼
+Docker Network
+      │
+      ▼
+Primary
+      │
+      ▼
+pg_hba.conf
+      │
+      ▼
+Role Authentication
+      │
+      ▼
+Replication Protocol
+      │
+      ▼
+WAL Streaming
+```
+
+---
+
+## 13. Replication Failure Scenarios
+
+- Network Partition
+- Standby Offline
+- WAL Removed
+- Missing Replication Slot
+- `wal_keep_size` Too Small
+- Rebuild using `pg_basebackup`
+
+---
+
+## 14. Security
+
+- Why `listen_addresses='*'`
+- Production Networking
+- Restricting `pg_hba.conf`
+- Least Privilege
+- Replication User
+- Password Storage
+- SCRAM
+- Secrets
+
+---
+
+## 15. Useful Commands
+
+### Configuration
+
+```sql
+SHOW ...
+```
+
+```sql
+ALTER SYSTEM ...
+```
+
+### Roles
+
+```sql
+CREATE ROLE
+```
+
+```sql
+\du
+```
+
+### WAL
+
+```sql
+SELECT pg_current_wal_lsn();
+```
+
+### Replication
+
+```sql
+SELECT * FROM pg_stat_replication;
+```
+
+### Recovery
+
+```sql
+SELECT pg_is_in_recovery();
+```
+
+### Settings
+
+```sql
+SELECT * FROM pg_settings;
+```
+
+---
+
+## 16. Concepts Still To Learn
+
+- Checkpoints
+- WAL Internals
+- WAL Record Format
+- Timeline
+- Promotion
+- Failover
+- Split Brain
+- Synchronous Replication
+- Logical Replication
+- Replication Slots in Production
+- Archiving
+- Point-in-Time Recovery (PITR)
+- Hot Standby Feedback
+- Vacuum and Replication
+- Replication Lag Monitoring
+- Cascading Replication
+- Replication Timeout
+- PostgreSQL on Kubernetes
+- StatefulSets for PostgreSQL
+- PVCs and Persistent Storage
+- Services for Primary/Standby
+- Failover Service Switching
+- High Availability Patterns
+- Patroni (for comparison)
+- CloudNativePG (for comparison)
