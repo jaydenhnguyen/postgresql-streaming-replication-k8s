@@ -199,8 +199,8 @@ After that:
 | **Standby replication**          | Possibly still needed - kept until the standby has replayed it |
 | **Disk space**                   | Eventually **recycled** (renamed + reused), not deleted        |
 
-See [2_WAL.md - Checkpoint](./2_WAL.md#checkpoint) for the cut-point mental model, and 
-[2_WAL.md - WAL Recycling](./2_WAL.md#wal-recycling) for why segments are renamed and reused instead of deleted.
+See [5_Checkpoint.md](./5_Checkpoint.md) for the cut-point mental model, and 
+[2_WAL.md](./2_WAL.md) (WAL Recycling) for why segments are renamed and reused instead of deleted.
 
 ---
 
@@ -277,5 +277,6 @@ into its `base/` files. That gap is exactly what matters during promotion and ro
 ## References
 
 - [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md) — processes, `PGDATA`, `base/`
-- [2_WAL.md](./2_WAL.md) — WAL segments, lifecycle, checkpoint, crash recovery
+- [2_WAL.md](./2_WAL.md) — WAL segments, lifecycle, crash recovery
+- [5_Checkpoint.md](./5_Checkpoint.md) — checkpoint flush and cut-point LSN
 - [PostgreSQL Documentation — WAL](https://www.postgresql.org/docs/current/wal-intro.html)

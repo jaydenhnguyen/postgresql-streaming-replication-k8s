@@ -1,15 +1,16 @@
 # Write-Ahead Logging (WAL)
-A mechanism PostgreSQL uses to guarantee that committed transactions survive a crash. Every database modification is 
+👉 A mechanism PostgreSQL uses to guarantee that committed transactions survive a crash. Every database modification is 
 recorded in the WAL **before** the corresponding data files are updated on disk.
 
-WAL is also the foundation for:
+👉 WAL is also the foundation for:
 - **Crash recovery** - replaying unflushed changes after an unexpected shutdown
 - **Streaming replication** - shipping the same WAL records from a primary to a standby
 - **Point-in-Time Recovery (PITR)** - restoring to a specific moment using archived WAL
 
-Without WAL, PostgreSQL could not safely recover from crashes or replicate data to standby servers.
+👉 Without WAL, PostgreSQL could not safely recover from crashes or replicate data to standby servers.
 
-👉 WAL operates at the **cluster level** - it records changes across the entire PostgreSQL cluster, not per individual database.
+👉 WAL operates at the **cluster level** - it records changes across the entire PostgreSQL cluster, not per individual 
+database.
 
 ---
 
@@ -464,117 +465,12 @@ point."
 
 ---
 
-## Checkpoint
-A **checkpoint** is a point in the WAL stream where PostgreSQL guarantees that all data changes before that point have 
-been written to the data files in `base/`.
+## ‼️ Checkpoint
 
-Think of it as PostgreSQL saying:
+Checkpoint details live in their own note - flush to `base/`, cut-point LSN, triggers, and how checkpoints differ 
+from replication slots:
 
-> "Everything that happened **before this point** is now safely written into the real table files under `base/`. 
-> Do not need old WAL just to recover that part anymore."
-
-The **Checkpointer** background process is responsible for creating checkpoints.
-
-### What happens during a checkpoint
-```
-Checkpointer
-     │
-     ├── 1. Flush all dirty data pages from buffer cache → base/
-     │
-     ├── 2. Write a CHECKPOINT record to WAL
-     │
-     └── 3. Update control file with checkpoint position
-```
-
-**Flush** means: copy modified pages from RAM (buffer cache) to the correct files under `base/`. After flush, the page 
-in RAM becomes **clean** - it matches what is on disk.
-
-### ‼️ Checkpoint marks a cut point, NOT per-record "success"
-
-A common misconception: "checkpoint marks each WAL record as done, so that WAL will never be used."
-
-What actually happens: the checkpoint records a **position in the WAL stream** (an LSN):
-
-> "At LSN `0/3000000`, all changes **before** this point are safely in `base/`."
-
-```
-WAL stream:  ... [INSERT record] [COMMIT record] ... [CHECKPOINT record at LSN X]
-                      ▲                ▲                      ▲
-                   your txn         durable              "base/ caught up to here"
-```
-
-After the checkpoint:
-
-- WAL **before** LSN X is no longer needed for **this server's crash recovery** - on a crash, PostgreSQL reads the 
-  control file and replays only from LSN X forward
-- But that WAL may **still be needed** by a standby, a replication slot, or the archiver
-- Eventually those old segments get **recycled** - not because they were "wrong", but because `base/` + newer WAL 
-  are enough
-
-| Wrong mental model                            | Better mental model                                          |
-|-----------------------------------------------|---------------------------------------------------------------|
-| Checkpoint marks each WAL record "success"    | Checkpoint marks a **cut point** in the WAL stream            |
-| That WAL is never used again                  | That WAL is not needed for **local crash recovery** anymore   |
-| COMMIT + checkpoint = same thing              | COMMIT = durable in WAL; checkpoint = copied to `base/`       |
-
-```
-Memory (buffer cache)          Disk
-┌─────────────────┐           ┌──────────────┐
-│ dirty pages     │  flush    │ base/        │
-│ (changed data)  │ ────────► │ (table files)│
-└─────────────────┘           └──────────────┘
-         │
-         │ also writes
-         ▼
-    pg_wal/  ← "CHECKPOINT happened at LSN X"
-```
-
-### Why checkpoints matter
-| Reason                  | Explanation                                                                       |
-|-------------------------|-----------------------------------------------------------------------------------|
-| **Crash recovery time** | Recovery only replays WAL *after* the last checkpoint, not the entire WAL history |
-| **WAL recycling**       | Segments before the checkpoint can be safely recycled                             |
-| **Consistent backup**   | `pg_basebackup` relies on checkpoint boundaries for a consistent snapshot         |
-
-### Checkpoint trigger conditions
-Checkpoints occur when:
-- Enough WAL has been generated (`max_wal_size` reached)
-- The `checkpoint_timeout` timer expires (default 5 minutes)
-- A manual checkpoint is requested:
-  ```sql
-  CHECKPOINT;
-  ```
-- The server is shut down cleanly (`pg_ctl stop`)
-
-### Viewing checkpoint information
-```sql
-SELECT *
-FROM pg_control_checkpoint();
-```
-
-Or check when the last checkpoint occurred:
-```sql
-SELECT pg_stat_get_db_numbackends(oid) AS backends,
-       checkpoints_timed,
-       checkpoints_req,
-       checkpoint_write_time,
-       checkpoint_sync_time
-FROM pg_stat_database
-WHERE datname = current_database();
-```
-
-```
-Timeline of WAL and checkpoints:
-
-WAL:  |--seg1--|--seg2--|--seg3--|--seg4--|
-                    ▲               ▲
-              checkpoint 1    checkpoint 2
-              
-Recovery after crash: replay only from checkpoint 2 forward
-Recycling: segments before checkpoint 2 can be reused
-```
-
-👉 Checkpoints trade **write amplification** (flushing many pages at once) for **faster recovery** and **WAL recycling**.
+**Read the full walkthrough:** [5_Checkpoint.md](./5_Checkpoint.md)
 
 ---
 
@@ -641,9 +537,7 @@ difference is the source: local `pg_wal/` after a crash vs. network stream from 
 
 👉 WAL records are grouped into **16 MB segments** stored in `pg_wal/`.
 
-👉 The **WAL Writer** flushes WAL to disk; the **Checkpointer** flushes data pages to `base/`.
-
-👉 **Checkpoints** mark safe points for recovery and enable WAL recycling.
+👉 The **WAL Writer** flushes WAL to disk; the **Checkpointer** flushes data pages to `base/` - see [5_Checkpoint.md](./5_Checkpoint.md).
 
 👉 **Crash recovery** replays WAL from the last checkpoint to restore committed work.
 
@@ -655,8 +549,10 @@ difference is the source: local `pg_wal/` after a crash vs. network stream from 
 
 ## References
 
+- [3_Commit_Flow.md](./3_Commit_Flow.md) - INSERT + COMMIT walkthrough
+- [5_Checkpoint.md](./5_Checkpoint.md) - checkpoints, cut-point LSN, recycling
+- [6_Replication_Slots.md](./6_Replication_Slots.md) - slots vs checkpoints
 - [PostgreSQL Documentation - WAL](https://www.postgresql.org/docs/current/wal-intro.html)
 - [PostgreSQL Documentation - WAL Internals](https://www.postgresql.org/docs/current/wal-internals.html)
-- [PostgreSQL Documentation - Checkpoints](https://www.postgresql.org/docs/current/wal-configuration.html)
 - [PostgreSQL Documentation - Continuous Archiving and Point-in-Time Recovery](https://www.postgresql.org/docs/current/continuous-archiving.html)
 - [Medium - PostgreSQL Architecture](https://medium.com/@sumeet.k.shukla/postgresql-architecture-6df259dc1145)

@@ -1,9 +1,9 @@
 # Log Sequence Number (LSN)
 
-An **LSN (Log Sequence Number)** is a pointer to a **byte position in the WAL stream**. Every WAL record has one - it 
+👉 An **LSN (Log Sequence Number)** is a pointer to a **byte position in the WAL stream**. Every WAL record has one - it 
 identifies exactly *where* in the log that record lives.
 
-LSNs are the "ruler" of PostgreSQL replication: they measure how far the WAL has been written on the `primary`, 
+👉 LSNs are the "ruler" of PostgreSQL replication: they measure how far the WAL has been written on the `primary`, 
 how far the `standby` has replayed, and how many bytes apart the two are (**replication lag**).
 
 Builds on [2_WAL.md](./2_WAL.md) (WAL records, segments) and [3_Commit_Flow.md](./3_Commit_Flow.md) (when WAL is 
@@ -547,6 +547,7 @@ commit** if the `standby` is down - durability vs availability tradeoff.
 ## References
 
 - [2_WAL.md](./2_WAL.md) - WAL records, segments, lifecycle
+- [5_Checkpoint.md](./5_Checkpoint.md) - checkpoint LSN cut point
 - [3_Commit_Flow.md](./3_Commit_Flow.md) - when WAL is written during COMMIT
 - [PostgreSQL Documentation - pg_lsn Type](https://www.postgresql.org/docs/current/datatype-pg-lsn.html)
 - [PostgreSQL Documentation - System Administration Functions (WAL)](https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)
