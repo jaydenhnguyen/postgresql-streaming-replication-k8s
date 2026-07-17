@@ -250,6 +250,58 @@ t=5:00  timeout expires         → Checkpoint #2 fires on schedule
 
 ---
 
+## ‼️ `max_wal_size` vs `checkpoint_timeout`
+
+Both trigger checkpoints. They are **not** two names for the same thing - they are two different **limits**, and 
+whichever is hit **first** wins.
+
+|                         | `checkpoint_timeout`                         | `max_wal_size`                                      |
+|-------------------------|----------------------------------------------|-----------------------------------------------------|
+| **Unit**                | Time (e.g. `5min`)                           | Size (e.g. `1GB`)                                   |
+| **Question it answers** | "How long can I wait between checkpoints?"   | "How much WAL may pile up before I checkpoint?"     |
+| **Trigger**             | Clock expires                                | Estimated WAL between checkpoints grows too large   |
+| **Quiet workload**      | Usually wins (timeout fires on schedule)     | Rarely reached                                      |
+| **Busy write workload** | Often loses to the size limit                | Usually wins (checkpoint fires **early**)           |
+| **What it does NOT do** | Does not cap disk usage by itself            | Does not guarantee "keep this much WAL forever"     |
+
+```
+After Checkpoint #1:
+
+  Time budget ──────────► checkpoint_timeout (e.g. 5 min)
+  Size budget ──────────► max_wal_size (e.g. 1 GB)
+
+         ┌─ quiet DB: time budget runs out first
+         │
+Checkpoint #2 fires when EITHER budget is used up
+         │
+         └─ busy DB: size budget runs out first (early checkpoint)
+```
+
+**How to read the stats:**
+
+```sql
+SELECT checkpoints_timed,   -- hit checkpoint_timeout
+       checkpoints_req      -- hit max_wal_size / CHECKPOINT / etc.
+FROM pg_stat_bgwriter;
+```
+
+- Mostly `checkpoints_timed` → time limit is in charge (typical quiet/moderate load)
+- Mostly `checkpoints_req` → WAL is growing fast; size limit is forcing early checkpoints
+
+**Tuning intuition:**
+
+- Raise `max_wal_size` → fewer early checkpoints under load, but **longer crash recovery** (more WAL to replay) and 
+  more WAL on disk between checkpoints
+- Lower `checkpoint_timeout` → more frequent time-based checkpoints, shorter recovery windows, more flush I/O
+
+👉 **`checkpoint_timeout` = time ceiling. `max_wal_size` = size ceiling. Same outcome (a checkpoint), different 
+meters.**
+
+For how `max_wal_size` differs from **retaining** WAL for standbys, see 
+[`max_wal_size` vs `wal_keep_size`](./2_WAL.md) in [2_WAL.md](./2_WAL.md).
+
+---
+
 ## Background Writer vs Checkpointer
 
 PostgreSQL has **two** processes that write dirty pages to disk. They look similar but have different jobs.
@@ -345,7 +397,11 @@ FROM pg_stat_bgwriter;
 👉 `checkpoint_timeout = 5min` means "checkpoint no later than 5 minutes after the last one" - **not** "each page 
 stays dirty for exactly 5 minutes."
 
-👉 A checkpoint fires when **either** `checkpoint_timeout` expires **or** `max_wal_size` is reached (whichever first).
+👉 A checkpoint fires when **either** `checkpoint_timeout` expires **or** `max_wal_size` is reached (whichever first) - 
+time ceiling vs size ceiling, same outcome, different meters.
+
+👉 **`max_wal_size` ≠ `wal_keep_size`.** One forces a checkpoint; the other is a soft WAL cushion for standbys. Full 
+comparison: [2_WAL.md](./2_WAL.md).
 
 👉 **Background Writer** gently flushes some dirty pages between checkpoints; **Checkpointer** creates the recovery 
 cut point.
@@ -358,7 +414,7 @@ cut point.
 
 ## References
 
-- [2_WAL.md](./2_WAL.md) - WAL lifecycle, recycling, crash recovery
+- [2_WAL.md](./2_WAL.md) - WAL lifecycle, recycling, `max_wal_size` vs `wal_keep_size`
 - [3_Commit_Flow.md](./3_Commit_Flow.md) - INSERT → dirty page → COMMIT → checkpoint
 - [6_Replication_Slots.md](./6_Replication_Slots.md) - Checkpoint vs Replication Slot
 - [PostgreSQL Documentation - Checkpoints](https://www.postgresql.org/docs/current/wal-configuration.html)

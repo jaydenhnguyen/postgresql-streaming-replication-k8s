@@ -435,11 +435,12 @@ Example:
 
 | #  | Note                                                                         | What it covers                                              |
 |----|------------------------------------------------------------------------------|-------------------------------------------------------------|
+| 0  | [0_Lab_Bootstrap_Primary_Standby.md](0_Bootstrap_Primary_Standby.md)         | Hands-on: launch `primary` + `standby` from scratch         |
 | 1  | [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md)               | Cluster, processes, `PGDATA`, `pg_hba.conf`                 |
 | 2  | [2_WAL.md](./2_WAL.md)                                                       | WAL records, segments, lifecycle, recycling, crash recovery |
 | 3  | [3_Commit_Flow.md](./3_Commit_Flow.md)                                       | What happens on `INSERT` + `COMMIT`                         |
 | 4  | [4_LSN.md](./4_LSN.md)                                                       | LSN, lag in bytes, row-loss accounting                      |
-| 5  | [5_Checkpoint.md](./5_Checkpoint.md)                                         | Checkpoints, timeout vs `max_wal_size`, bgwriter            |
+| 5  | [5_Checkpoint.md](./5_Checkpoint.md)                                         | Checkpoints, `max_wal_size` vs timeout, bgwriter            |
 | 6  | [6_Replication_Slots.md](./6_Replication_Slots.md)                           | Slots, retention, disk risk                                 |
 | 7  | [7_Base_Backup.md](./7_Base_Backup.md)                                       | `pg_basebackup`, seeding a `standby`                        |
 | 8  | [8_Standby_Initialization.md](./8_Standby_Initialization.md)                 | `standby.signal`, `primary_conninfo`, recovery mode         |
