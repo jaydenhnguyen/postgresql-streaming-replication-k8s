@@ -230,6 +230,8 @@ The flip is **one-way**: returning this server to `standby` duty requires re-see
 👉 **`t` = follower, `f` = leader.** After a promotion, seeing `f` plus a successful `INSERT` is the definitive 
 proof the `standby` became a real `primary`.
 
+Full promotion walkthrough (methods, data-loss prevention, fencing): [9_Promotion.md](./9_Promotion.md).
+
 ---
 
 ## Putting It Together: From Seed to Streaming
@@ -278,6 +280,7 @@ is exactly why the seeding step must be skipped when `pgdata` already exists.
 ## References
 
 - [7_Base_Backup.md](./7_Base_Backup.md) - seeding, the `-R` flag
+- [9_Promotion.md](./9_Promotion.md) - promote standby → primary, prevent data loss
 - [2_WAL.md](./2_WAL.md) - WAL replay, crash recovery
 - [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md) - Startup Process, WAL Receiver, WAL Sender
 - [6_Replication_Slots.md](./6_Replication_Slots.md) - `primary_slot_name`

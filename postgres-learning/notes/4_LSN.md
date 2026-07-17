@@ -361,136 +361,29 @@ Then tie the count to the WAL state:
 ### The lost rows may still exist - on the old `primary`
 
 If the old `primary` is still alive, the "lost" rows still exist **there** - but they are absent from the **new 
-`primary`'s timeline**. Writing to both nodes now would create **split-brain** (two diverging histories). See the next 
-section for how to prevent that.
+`primary`'s timeline**. Writing to both nodes now would create **split-brain** (two diverging histories). How to 
+prevent that: [9_Promotion.md](./9_Promotion.md).
 
 👉 **"Some rows were lost" is not an answer. "100 sent, 96 made it, 4 lost, because the replay LSN at promotion was 
 0/3000000 while the `primary` was at 0/3000A00" is an answer.**
 
 ---
 
-## ‼️ Preventing Row Loss (and Split-Brain): the Solutions
+## Preventing Row Loss → See 9_Promotion.md
 
-The root cause of failover row loss: **async replication acknowledges COMMIT before the `standby` has the data.** Every 
-solution is about **when** the commit is allowed to return - or about containing the damage afterward.
+A nonzero replay gap means asynchronous promotion may lose acknowledged writes. This note's job is to **measure and 
+explain** that; the **prevention strategies** live in the promotion note:
 
-### Solution 1 - Synchronous replication (prevents the loss)
+- Synchronous replication (`synchronous_commit`) - zero loss of acked commits, but COMMIT blocks if the `standby` is down
+- Promote only when lag ≈ 0 (planned failovers)
+- Quorum `standbys`, replication slots, fencing the old `primary` (split-brain), HA automation
 
-Make the `primary` **wait for the `standby`** before telling the client "committed":
-
-```
-# postgresql.conf on primary
-synchronous_standby_names = 'standby1'
-synchronous_commit = on
-```
+**Full walkthrough:** [9_Promotion.md](./9_Promotion.md) - "How to Prevent Data Loss During Promotion"
 
 ```
-Client ──► Primary: write WAL
-           Primary ──► Standby: send WAL, wait for confirmation
-           Standby ──► Primary: "I have it (flushed)"
-Client ◄── Primary: COMMIT OK   ← only now
+4_LSN.md:       "How do I measure and explain what survived?"
+9_Promotion.md: "How do I perform promotion and prevent loss?"
 ```
-
-|                           | Async              | Sync                                              |
-|---------------------------|--------------------|---------------------------------------------------|
-| Rows lost on failover     | Some (the lag gap) | **Zero** - every acked commit is on the `standby` |
-| Commit latency            | Low                | Higher (waits for network round-trip)             |
-| If `standby` is down/slow | Nothing happens    | **`primary` BLOCKS on commit** - writes hang      |
-
-‼️ **The tradeoff:** sync trades **availability** for **durability**. With `synchronous_commit = on`, an insert loop 
-would **stall** (hang waiting) instead of losing rows when the `standby` lags or dies.
-
-Levels of `synchronous_commit`:
-
-| Setting        | `primary` waits until `standby` has...                                                                 |
-|----------------|--------------------------------------------------------------------------------------------------------|
-| `off`          | Does not even wait for local WAL flush before replying.                                                |
-| `local`        | WAL durable on `primary` only; does not wait for `standby`.                                            |
-| `remote_write` | `standby` received and wrote WAL to its operating-system buffers, but may not have flushed it to disk. |
-| `on`           | `standby` flushed WAL to durable storage. Recommended for normal synchronous replication.              |
-| `remote_apply` | `standby` flushed and replayed WAL, so the transaction is already visible to queries there.            |
-
-`remote_apply` is strongest but slowest.
-
-### Solution 2 - Quorum / multiple `standbys`
-
-Wait for **some** of several `standbys`, so a single slow `standby` does not block writes:
-
-```
-synchronous_standby_names = 'ANY 1 (standby1, standby2)'
-```
-
-```
-Commit returns when ANY 1 of the 2 standbys confirms
-  → tolerates one standby being down
-  → data guaranteed on at least one replica
-```
-
-Softens Solution 1's availability problem while keeping most of its durability.
-
-### Solution 3 - Replication slots (prevents a DIFFERENT loss)
-
-A **replication slot** does not stop failover row loss - it prevents the `primary` from **recycling WAL the `standby` 
-still needs**:
-
-```sql
-SELECT pg_create_physical_replication_slot('standby1_slot');
-```
-
-```
-Without slot: primary recycles WAL → standby cannot catch up → broken → re-basebackup
-With slot:    primary keeps WAL   → standby always able to catch up
-```
-
-‼️ Watch disk usage: a dead `standby` + a slot = WAL piles up forever on the `primary`.
-
-### Solution 4 - Fence the old `primary` (prevent split-brain)
-
-After promotion, the "lost" rows may still be alive on the old `primary`. If clients keep writing there, two 
-timelines diverge:
-
-```
-After promoting standby:
-  Old primary still up  →  clients might write to it  →  split-brain
-```
-
-| Action                                         | Effect                                           |
-|------------------------------------------------|--------------------------------------------------|
-| Repoint the write Service to the new `primary` | Clients only reach the promoted node             |
-| Stop / delete the old `primary` pod            | It cannot accept writes                          |
-| STONITH ("shoot the other node in the head")   | HA tools kill the old `primary` before promoting |
-
-In Kubernetes, patching the write Service selector is the practical step:
-
-```bash
-kubectl patch svc pg-write -n pg-<id> \
-  -p '{"spec":{"selector":{"role":"new-primary-labels"}}}'
-```
-
-### Solution 5 - Automated failover tools (the production answer)
-
-Manual failover is error-prone. Real systems use orchestrators that combine sync replication + health checks + 
-automatic promotion + fencing:
-
-| Tool              | What it does                                        |
-|-------------------|-----------------------------------------------------|
-| **Patroni**       | Leader election, auto-promote, fences old `primary` |
-| **repmgr**        | Failover automation + monitoring                    |
-| **CloudNativePG** | Kubernetes operator: promotion + service cutover    |
-
-### How to choose
-
-```
-Need zero data loss?                       → synchronous replication (1/2)
-Need high availability?                    → async + fast failover + fencing (4)
-Standby must never fall off the WAL stream → replication slot (3)
-Avoid split-brain?                         → repoint service + stop old primary (4)
-Production-grade automation?               → Patroni / CloudNativePG (5)
-```
-
-👉 With **async** replication (this project's setup): explain the loss with LSN numbers, state that 
-`synchronous_commit = on` would make the loss **zero** but the write loop would **block** if the `standby` lagged or 
-died, and prevent split-brain by repointing the write Service and stopping the old `primary`.
 
 ---
 
@@ -537,10 +430,7 @@ lost on the new timeline.
 👉 The LSN gap explains **why** rows were lost and how far behind (bytes); row tags/counts give the **exact number** 
 lost - use both together.
 
-👉 Synchronous replication (`synchronous_commit = on`) makes failover loss **zero**, but the `primary` **blocks on 
-commit** if the `standby` is down - durability vs availability tradeoff.
-
-👉 After promotion, fence the old `primary` (repoint the write Service, stop the pod) to prevent **split-brain**.
+👉 Preventing that loss (sync replication, lag ≈ 0, fencing, split-brain) is covered in [9_Promotion.md](./9_Promotion.md).
 
 ---
 
@@ -549,6 +439,7 @@ commit** if the `standby` is down - durability vs availability tradeoff.
 - [2_WAL.md](./2_WAL.md) - WAL records, segments, lifecycle
 - [5_Checkpoint.md](./5_Checkpoint.md) - checkpoint LSN cut point
 - [3_Commit_Flow.md](./3_Commit_Flow.md) - when WAL is written during COMMIT
+- [9_Promotion.md](./9_Promotion.md) - promotion + preventing data loss
 - [PostgreSQL Documentation - pg_lsn Type](https://www.postgresql.org/docs/current/datatype-pg-lsn.html)
 - [PostgreSQL Documentation - System Administration Functions (WAL)](https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADMIN-BACKUP)
 - [PostgreSQL Documentation - pg_stat_replication](https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-REPLICATION-VIEW)
