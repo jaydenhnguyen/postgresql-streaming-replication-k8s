@@ -1,10 +1,10 @@
-# Promotion: `Standby` → `primary`
+# Promotion: Standby → Primary
 
-**Promotion** turns a read-only `standby` into a read-write `primary`. It is the core of failover: when the old `primary` 
-dies (or is taken offline), the `standby` takes over and starts accepting writes.
+**Promotion** turns a read-only `standby` into a read-write `primary`. That is failover: when the old `primary` dies 
+(or you take it offline), the `standby` takes over and starts accepting writes.
 
-This note covers what promotion actually does, the two ways to trigger it, why it is one-way, why rows can be lost, 
-and - most importantly - **how to prevent data loss** before and during promotion.
+This note covers what promotion does, the two ways to trigger it, why it is one-way, why rows can be lost, and how to 
+**prevent data loss** before and during promotion.
 
 Builds on [8_Standby_Initialization.md](./8_Standby_Initialization.md) (recovery mode, `standby.signal`) and 
 [4_LSN.md](./4_LSN.md) (LSN gap, row-loss accounting).

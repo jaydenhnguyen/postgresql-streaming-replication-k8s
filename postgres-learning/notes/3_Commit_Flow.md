@@ -193,11 +193,11 @@ The checkpoint does **not** mark the `INSERT`'s WAL record as "success" and thro
 
 After that:
 
-| For...                           | Old WAL (before LSN X) is...                                   |
-|----------------------------------|----------------------------------------------------------------|
-| **This server's crash recovery** | No longer needed - recovery replays only from LSN X forward    |
-| **Standby replication**          | Possibly still needed - kept until the standby has replayed it |
-| **Disk space**                   | Eventually **recycled** (renamed + reused), not deleted        |
+| For...                           | Old WAL (before LSN X) is...                                     |
+|----------------------------------|------------------------------------------------------------------|
+| **This server's crash recovery** | No longer needed - recovery replays only from LSN X forward      |
+| **`standby` replication**        | Possibly still needed - kept until the `standby` has replayed it |
+| **Disk space**                   | Eventually **recycled** (renamed + reused), not deleted          |
 
 See [5_Checkpoint.md](./5_Checkpoint.md) for the cut-point mental model, and 
 [2_WAL.md](./2_WAL.md) (WAL Recycling) for why segments are renamed and reused instead of deleted.
@@ -241,7 +241,7 @@ If the server crashes **after COMMIT** but **before checkpoint**:
 
 ## How This Connects to Replication
 
-On a **standby**, the same replay mechanism applies - but the WAL arrives over the network from the primary instead of 
+On a `standby`, the same replay mechanism applies - but the WAL arrives over the network from the `primary` instead of 
 from local `pg_wal/` after a crash:
 
 ```
@@ -255,7 +255,7 @@ Primary                         Standby
   │                                │  → updates standby's base/
 ```
 
-This is why replication lag is measured in **LSN bytes** - the standby may have received WAL but not yet replayed it 
+This is why replication lag is measured in **LSN bytes** - the `standby` may have received WAL but not yet replayed it 
 into its `base/` files. That gap is exactly what matters during promotion and row-loss accounting.
 
 ---

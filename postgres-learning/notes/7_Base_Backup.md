@@ -147,12 +147,12 @@ Why not re-copy periodically?
 
 Only when the `standby` can no longer follow the WAL stream:
 
-| Scenario | Why re-seed |
-|---|---|
-| `primary` recycled WAL the `standby` needs (no slot) | Gap in the stream - cannot replay across it |
-| Slot invalidated by `max_slot_wal_keep_size` | Same - required WAL is gone |
-| `standby`'s `PGDATA` corrupted/lost | Nothing left to resume from |
-| `standby` diverged (e.g. was promoted by accident) | Timelines split - byte-level clone needed again |
+| Scenario                                             | Why re-seed                                     |
+|------------------------------------------------------|-------------------------------------------------|
+| `primary` recycled WAL the `standby` needs (no slot) | Gap in the stream - cannot replay across it     |
+| Slot invalidated by `max_slot_wal_keep_size`         | Same - required WAL is gone                     |
+| `standby`'s `PGDATA` corrupted/lost                  | Nothing left to resume from                     |
+| `standby` diverged (e.g. was promoted by accident)   | Timelines split - byte-level clone needed again |
 
 This is why the **initContainer must be idempotent** in a Kubernetes setup: on pod restart, if `pgdata` already 
 exists (PVC survived), **skip** the copy - the `standby` resumes streaming from where it left off. Re-copying on every 
@@ -192,10 +192,10 @@ See [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md) `pg_hba.conf`
 
 Because what `pg_basebackup` asks for is far more powerful than normal SQL:
 
-| Normal role can... | Replication role can... |
-|---|---|
-| Query tables it has access to | Read **every byte of the entire cluster** |
-| See one database at a time | Copy all databases, roles, configs |
+| Normal role can...                | Replication role can...                             |
+|-----------------------------------|-----------------------------------------------------|
+| Query tables it has access to     | Read **every byte of the entire cluster**           |
+| See one database at a time        | Copy all databases, roles, configs                  |
 | Be restricted by GRANTs per table | Bypass table-level permissions entirely (raw files) |
 
 A role that can take a base backup effectively holds a copy of **everything** - passwords hashes, all data, all 
@@ -221,12 +221,12 @@ psql ──► SQL protocol        pg_basebackup ──► replication protocol
 
 ### Why not just SQL?
 
-| Requirement | SQL protocol | Replication protocol |
-|---|---|---|
-| Read raw data files (not rows) | ✗ | ✓ `BASE_BACKUP` command |
-| Stream WAL continuously | ✗ (request/response) | ✓ `START_REPLICATION` |
-| Coordinate start/stop LSN markers | ✗ | ✓ built in |
-| Served by | Backend process | **WAL Sender** process |
+| Requirement                       | SQL protocol         | Replication protocol    |
+|-----------------------------------|----------------------|-------------------------|
+| Read raw data files (not rows)    | ✗                    | ✓ `BASE_BACKUP` command |
+| Stream WAL continuously           | ✗ (request/response) | ✓ `START_REPLICATION`   |
+| Coordinate start/stop LSN markers | ✗                    | ✓ built in              |
+| Served by                         | Backend process      | **WAL Sender** process  |
 
 Two practical consequences:
 
@@ -261,7 +261,7 @@ Where to write the copied cluster - becomes the new server's `PGDATA`.
 
 ### ‼️ `-R` (write recovery config)
 
-The flag that turns a copy into a **standby**. After the copy, it writes into the target:
+The flag that turns a copy into a `standby`. After the copy, it writes into the target:
 
 ```
 standby.signal               ← empty file: "start in recovery mode, you are a standby"
@@ -269,21 +269,21 @@ postgresql.auto.conf         ← appended with:
   primary_conninfo = 'host=<primary-host> user=repl ...'
 ```
 
-Without `-R`, the copy would start as an **independent primary** (a fork of the cluster). With `-R`, it starts in 
+Without `-R`, the copy would start as an **independent `primary`** (a fork of the cluster). With `-R`, it starts in 
 recovery mode and immediately begins streaming from the `primary`.
 
 ### ‼️ `-X stream` (how to get the WAL "repair kit")
 
 Controls how the WAL generated **during** the copy (LSN X → Y) is obtained:
 
-| Option | Behavior | Risk |
-|---|---|---|
+| Option      | Behavior                                                          | Risk                                                          |
+|-------------|-------------------------------------------------------------------|---------------------------------------------------------------|
 | `-X stream` | Open a **second connection** and stream WAL live while files copy | Safe - WAL arrives as it is made (default in modern versions) |
-| `-X fetch` | Copy WAL **after** the files finish | `primary` may have recycled it by then → backup fails |
-| `-X none` | Do not include WAL | Copy is not self-consistent - needs WAL from elsewhere |
+| `-X fetch`  | Copy WAL **after** the files finish                               | `primary` may have recycled it by then → backup fails         |
+| `-X none`   | Do not include WAL                                                | Copy is not self-consistent - needs WAL from elsewhere        |
 
 `-X stream` is the right choice for `standby` seeding: the backup is complete and consistent the moment it finishes, 
-even on a busy primary.
+even on a busy `primary`.
 
 ### ✨ `-P` (progress)
 
@@ -349,6 +349,6 @@ ships the WAL repair kit live, `-P` shows progress.
 - [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md) - cluster vs database, `PGDATA`, `pg_hba.conf`
 - [2_WAL.md](./2_WAL.md) - WAL, crash recovery (same replay mechanism)
 - [4_LSN.md](./4_LSN.md) - LSN positions
-- [6_Replication_Slots.md](./6_Replication_Slots.md) - why a standby can fall off the stream
+- [6_Replication_Slots.md](./6_Replication_Slots.md) - why a `standby` can fall off the stream
 - [PostgreSQL Documentation - pg_basebackup](https://www.postgresql.org/docs/current/app-pgbasebackup.html)
 - [PostgreSQL Documentation - Base Backup Protocol](https://www.postgresql.org/docs/current/protocol-replication.html)

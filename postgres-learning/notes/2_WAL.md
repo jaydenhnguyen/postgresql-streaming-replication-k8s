@@ -1,16 +1,16 @@
 # Write-Ahead Logging (WAL)
-👉 A mechanism PostgreSQL uses to guarantee that committed transactions survive a crash. Every database modification is 
-recorded in the WAL **before** the corresponding data files are updated on disk.
 
-👉 WAL is also the foundation for:
-- **Crash recovery** - replaying unflushed changes after an unexpected shutdown
-- **Streaming replication** - shipping the same WAL records from a primary to a standby
-- **Point-in-Time Recovery (PITR)** - restoring to a specific moment using archived WAL
+WAL is how PostgreSQL makes sure a committed transaction survives a crash. Every change is written to the WAL 
+**before** the matching data files on disk are updated.
 
-👉 Without WAL, PostgreSQL could not safely recover from crashes or replicate data to standby servers.
+WAL also unlocks:
+- **Crash recovery** - replay changes after a crash
+- **Streaming replication** - ship the same WAL from a `primary` to a `standby`
+- **Point-in-Time Recovery (PITR)** - restore to a chosen moment using archived WAL
 
-👉 WAL operates at the **cluster level** - it records changes across the entire PostgreSQL cluster, not per individual 
-database.
+Without WAL, crash recovery and streaming replication would not work.
+
+👉 WAL is **cluster-wide** - one stream for the whole cluster, not one per database.
 
 ---
 
@@ -33,12 +33,12 @@ This guarantees **durability** (**the D in ACID**). Even if the server crashes b
 replay the WAL on restart and reconstruct every committed transaction.
 
 ### What WAL enables?
-| Use case              | How WAL helps                                                     |
-|-----------------------|-------------------------------------------------------------------|
-| Crash recovery        | Replay WAL from the last checkpoint to restore committed work     |
-| Streaming replication | WAL Sender reads the same WAL files and streams them to a standby |
-| PITR                  | Archive WAL segments and replay up to a target timestamp or LSN   |
-| Backup consistency    | `pg_basebackup` uses WAL to produce a consistent cluster snapshot |
+| Use case              | How WAL helps                                                       |
+|-----------------------|---------------------------------------------------------------------|
+| Crash recovery        | Replay WAL from the last checkpoint to restore committed work       |
+| Streaming replication | WAL Sender reads the same WAL files and streams them to a `standby` |
+| PITR                  | Archive WAL segments and replay up to a target timestamp or LSN     |
+| Backup consistency    | `pg_basebackup` uses WAL to produce a consistent cluster snapshot   |
 
 Example of the durability guarantee:
 ```
@@ -111,7 +111,7 @@ base/16384/...   ← written LATER
 👉 **WAL is the source of truth for recent changes.** Data files are a cached, on-disk representation that may lag 
 behind WAL.
 
-👉 During streaming replication, the `standby` receives **WAL**, **not copies** of `base/` files. The standby's Startup 
+👉 During streaming replication, the `standby` receives **WAL**, **not copies** of `base/` files. The `standby`'s Startup 
 Process replays WAL to update its own `base/` files.
 
 ---
@@ -127,7 +127,7 @@ Covers:
 - Full `INSERT` + `COMMIT` flow (steps 1–6)
 - Dirty vs clean pages
 - Why the client sees `COMMIT` before `base/` is updated
-- How this connects to standby replication
+- How this connects to `standby` replication
 
 ---
 
@@ -235,7 +235,7 @@ PGDATA/
 
 - **Append-only** - new records are always appended; existing segments are never modified in place
 - **Shared across the cluster** - WAL for all databases is written to the same `pg_wal/` directory
-- **Critical for replication** - the WAL Sender on the primary reads from this directory to stream to standbys
+- **Critical for replication** - the WAL Sender on the `primary` reads from this directory to stream to standbys
 
 ### Useful commands
 ✨ Check the current WAL write position:
@@ -319,7 +319,7 @@ WAL Recycling
 1. **Generate** - Backend Process creates WAL records in shared-memory WAL buffers
 2. **Flush** - WAL Writer writes buffers to the current segment in `pg_wal/`
 3. **Commit** - A commit WAL record is flushed; the client receives confirmation
-4. **Stream** - WAL Sender (on primary) reads new WAL and sends it to connected standbys
+4. **Stream** - WAL Sender (on `primary`) reads new WAL and sends it to connected standbys
 5. **Checkpoint** - Checkpointer writes dirty pages to `base/` and records a checkpoint in WAL
 6. **Recycle** - Segments older than the checkpoint can be reused or archived
 
@@ -393,17 +393,17 @@ rename file      →  metadata-only operation, same disk blocks     (fast)
 👉 **Recycle = rename + reuse disk space.** It avoids slow file create/delete on every WAL rotation and keeps a 
 pre-sized pool ready for the next writing burst.
 
-### Why recycle if the standby already has it?
+### Why recycle if the `standby` already has it?
 
-The standby does **not** need the primary to keep a copy of old WAL forever.
+The `standby` does **not** need the `primary` to keep a copy of old WAL forever.
 
 ```
 Primary's job:  generate WAL → stream to standby → eventually free disk space
 Standby's job:  receive WAL → replay into its own base/ → keep its own copy
 ```
 
-🧠 Once a checkpoint has flushed data to `base/` on the primary **and** all consumers (standbys, slots, archiver) have 
-passed that WAL position, the primary no longer needs those old segments. The standby already applied them into **its 
+🧠 Once a checkpoint has flushed data to `base/` on the `primary` **and** all consumers (standbys, slots, archiver) have 
+passed that WAL position, the `primary` no longer needs those old segments. The `standby` already applied them into **its 
 own** data directory.
 
 ```
@@ -439,16 +439,16 @@ Segments before the checkpoint can be recycled because `base/` already has that 
 needs that WAL (see below).
 
 ### What prevents recycling
-| Mechanism                           | Effect                                                           |
-|-------------------------------------|------------------------------------------------------------------|
-| **Replication slot**                | Retains WAL until the slowest consumer (standby) has replayed it |
-| **`wal_keep_size`**                 | Forces the primary to keep a minimum amount of WAL for standbys  |
-| **`archive_mode = on`**             | WAL must be archived before recycling                            |
-| **Long-running queries on standby** | Can delay WAL removal if `hot_standby_feedback` is enabled       |
+| Mechanism                             | Effect                                                             |
+|---------------------------------------|--------------------------------------------------------------------|
+| **Replication slot**                  | Retains WAL until the slowest consumer (`standby`) has replayed it |
+| **`wal_keep_size`**                   | Forces the `primary` to keep a minimum amount of WAL for standbys  |
+| **`archive_mode = on`**               | WAL must be archived before recycling                              |
+| **Long-running queries on `standby`** | Can delay WAL removal if `hot_standby_feedback` is enabled         |
 
-###  ‼️  Risk: WAL removed before standby catches up
-If a standby falls too far behind and the primary recycles WAL segments the standby still needs, replication breaks. 
-**The standby must be re-seeded with `pg_basebackup`.**
+###  ‼️  Risk: WAL removed before `standby` catches up
+If a `standby` falls too far behind and the `primary` recycles WAL segments the `standby` still needs, replication breaks. 
+**The `standby` must be re-seeded with `pg_basebackup`.**
 
 ```
 Primary                          Standby
@@ -460,7 +460,7 @@ Primary                          Standby
   │                                 └── replication broken
 ```
 
-👉 **Replication slots** exist specifically to prevent this - they tell the primary "do not recycle WAL past this 
+👉 **Replication slots** exist specifically to prevent this - they tell the `primary` "do not recycle WAL past this 
 point."
 
 ---
@@ -516,8 +516,8 @@ Database consistent
    - Row is restored even though base/ was never updated
 ```
 
-### Recovery on a standby
-A standby runs recovery **continuously** - it is always in recovery mode, replaying incoming WAL from the primary. 
+### Recovery on a `standby`
+A `standby` runs recovery **continuously** - it is always in recovery mode, replaying incoming WAL from the `primary`. 
 This is why standbys are read-only:
 
 ```sql
@@ -526,8 +526,8 @@ SELECT pg_is_in_recovery();
 -- f  (on primary, after promotion)
 ```
 
-👉 Crash recovery and standby WAL replay use the **same mechanism** - reading WAL records and redoing changes. The 
-difference is the source: local `pg_wal/` after a crash vs. network stream from the primary.
+👉 Crash recovery and `standby` WAL replay use the **same mechanism** - reading WAL records and redoing changes. The 
+difference is the source: local `pg_wal/` after a crash vs. network stream from the `primary`.
 
 ---
 
@@ -541,9 +541,9 @@ difference is the source: local `pg_wal/` after a crash vs. network stream from 
 
 👉 **Crash recovery** replays WAL from the last checkpoint to restore committed work.
 
-👉 **Streaming replication** ships the same WAL from primary to standby - the standby's Startup Process replays it.
+👉 **Streaming replication** ships the same WAL from `primary` to `standby` - the `standby`'s Startup Process replays it.
 
-👉 If WAL is recycled before a standby receives it, replication breaks and the standby must be re-seeded with `pg_basebackup`.
+👉 If WAL is recycled before a `standby` receives it, replication breaks and the `standby` must be re-seeded with `pg_basebackup`.
 
 ---
 

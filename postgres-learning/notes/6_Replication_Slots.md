@@ -1,13 +1,11 @@
 # Replication Slots
 
-👉 A **replication slot** is just a tiny piece of metadata that PostgreSQL stores to remember a replication 
-consumer's progress.
+A **replication slot** is a small bookmark the `primary` keeps for each replication consumer (for example a 
+`standby`). It records how far that consumer has gotten in the WAL stream, so the `primary` knows which WAL segments 
+it must **not recycle yet**.
 
-👉 It records **how far that consumer has progressed** through the WAL stream, so the `primary` knows which WAL 
-segments it must **not recycle yet**.
-
-👉 Without a slot, the `primary` recycles WAL based only on its own needs (checkpoints) - and can throw away WAL a 
-lagging `standby` still needs, breaking replication permanently.
+Without a slot, the `primary` recycles WAL based only on its own needs (checkpoints) - and can throw away WAL a 
+lagging `standby` still needs. That breaks replication for good until you re-seed.
 
 Builds on [2_WAL.md](./2_WAL.md) (WAL recycling), [5_Checkpoint.md](./5_Checkpoint.md) (local recovery cut point), 
 and [4_LSN.md](./4_LSN.md) (LSN positions).
@@ -57,7 +55,7 @@ Both use LSNs and both affect old WAL, but they solve **completely different pro
 
 |                       | Checkpoint                                         | Replication slot                                    |
 |-----------------------|----------------------------------------------------|-----------------------------------------------------|
-| Main purpose          | Make local data files recoverable                  | Keep WAL for a standby/consumer                     |
+| Main purpose          | Make local data files recoverable                  | Keep WAL for a `standby`/consumer                   |
 | Tracks                | Local server's recovery position                   | Consumer's WAL progress                             |
 | Concerned with        | Dirty pages and `base/`                            | WAL retention for replication                       |
 | Created by            | PostgreSQL automatically                           | Administrator/configuration                         |
@@ -77,7 +75,7 @@ WAL:  [row1][row2][row3][row4][row5]
 The checkpoint flushes dirty pages to the `primary`'s own `base/`. Afterward: "my local data files contain everything 
 up to here; crash recovery can start from this point." It never asks whether the `standby` received anything.
 
-### Slot asks: "Has my standby consumed the WAL?"
+### Slot asks: "Has my `standby` consumed the WAL?"
 
 ```
 Primary WAL:
@@ -87,8 +85,8 @@ Primary WAL:
         slot position   checkpoint/current progress
 ```
 
-The checkpoint may say the `primary` itself no longer needs old WAL - but the slot says "the standby is only at row2, 
-do not recycle past that." The `primary` retains row3-row5 so the standby can catch up.
+The checkpoint may say the `primary` itself no longer needs old WAL - but the slot says "the `standby` is only at row2, 
+do not recycle past that." The `primary` retains row3-row5 so the `standby` can catch up.
 
 ### How they work together
 
@@ -107,7 +105,7 @@ Can recycle       Must retain for standby
 ◄───────────┤──────────────────────────────────►
 ```
 
-The **oldest remaining requirement wins**. When the standby catches up (slot moves to `0/5900000`), the older 
+The **oldest remaining requirement wins**. When the `standby` catches up (slot moves to `0/5900000`), the older 
 segments become recyclable.
 
 ### Analogy: teacher and whiteboard
@@ -121,12 +119,12 @@ student is behind. Once the student catches up, the old board content can be era
 
 ### Neither replaces the other
 
-| Scenario                     | Consequence                                                               |
-|------------------------------|---------------------------------------------------------------------------|
-| Checkpoint without a slot    | Old WAL recycled → slow standby misses WAL → re-seed with `pg_basebackup` |
-| Slot without monitoring      | Dead standby → slot never moves → `pg_wal/` grows → disk fills            |
-| Checkpoint replacing a slot? | No - checkpoint only knows about **local** recovery, not standbys         |
-| Slot replacing a checkpoint? | No - slot only pins WAL, it never flushes dirty pages to `base/`          |
+| Scenario                     | Consequence                                                                 |
+|------------------------------|-----------------------------------------------------------------------------|
+| Checkpoint without a slot    | Old WAL recycled → slow `standby` misses WAL → re-seed with `pg_basebackup` |
+| Slot without monitoring      | Dead `standby` → slot never moves → `pg_wal/` grows → disk fills            |
+| Checkpoint replacing a slot? | No - checkpoint only knows about **local** recovery, not standbys           |
+| Slot replacing a checkpoint? | No - slot only pins WAL, it never flushes dirty pages to `base/`            |
 
 👉 **Checkpoint says: "My local data files are safe up to this recovery point." Slot says: "This consumer still 
 needs WAL from this earlier point - do not recycle it."**
@@ -305,7 +303,7 @@ Day 9:  pg_wal/ fills the disk
         → primary STOPS ACCEPTING WRITES (or crashes)
 ```
 
-An abandoned slot can take down the **primary** - the healthy node - which is worse than the original `standby` failure.
+An abandoned slot can take down the `primary` - the healthy node - which is worse than the original `standby` failure.
 
 ### Protections
 
@@ -377,7 +375,7 @@ SELECT pg_create_physical_replication_slot('one_too_many');
   sensible value up front
 - Must be **at least the number of `standbys`/consumers** you expect, plus headroom for temporary slots 
   (`pg_basebackup` can use a temporary slot during seeding)
-- Also matters on a **standby** if it will serve cascading replication or be promoted (the promoted node needs slot 
+- Also matters on a `standby` if it will serve cascading replication or be promoted (the promoted node needs slot 
   capacity for its own `standbys`)
 - Setting it to `0` disables slot creation entirely
 

@@ -1,8 +1,7 @@
 # Replication Failure Scenarios
 
-Streaming replication works until something breaks the path between "`primary` generates WAL" and "`standby` receives and 
-replays it." This note walks through the common failure modes, what each looks like, how to diagnose them, and how to 
-recover.
+Streaming replication breaks when something sits between "`primary` writes WAL" and "`standby` receives and replays 
+it." This note covers common failures, how they look, how to diagnose them, and how to recover.
 
 Builds on [2_WAL.md](./2_WAL.md) (recycling), [6_Replication_Slots.md](./6_Replication_Slots.md) (slots), 
 [7_Base_Backup.md](./7_Base_Backup.md) (re-seed), and [4_LSN.md](./4_LSN.md) (lag).
@@ -92,11 +91,11 @@ Primary                          Standby
 
 ### What you see
 
-| Where                          | Symptom                                                                       |
-|--------------------------------|-------------------------------------------------------------------------------|
-| Primary `pg_stat_replication`  | Empty (no streaming `standby`)                                                |
-| Primary `pg_replication_slots` | Slot may still exist with `active = f`                                        |
-| `primary` disk                 | If slot exists → `pg_wal/` **grows** (WAL retained for the offline `standby`) |
+| Where                            | Symptom                                                                       |
+|----------------------------------|-------------------------------------------------------------------------------|
+| `primary` `pg_stat_replication`  | Empty (no streaming `standby`)                                                |
+| `primary` `pg_replication_slots` | Slot may still exist with `active = f`                                        |
+| `primary` disk                   | If slot exists → `pg_wal/` **grows** (WAL retained for the offline `standby`) |
 
 ### Two outcomes depending on slots
 
@@ -151,7 +150,7 @@ ERROR:  replication slot ... is invalid because the required WAL was deleted
 -- (when max_slot_wal_keep_size invalidated the slot)
 ```
 
-Primary: `pg_stat_replication` empty; `standby` stuck in reconnect / crash loop.
+`primary`: `pg_stat_replication` empty; `standby` stuck in reconnect / crash loop.
 
 ### Why it happens
 
@@ -394,7 +393,7 @@ long downtime often means rebuild.
 
 👉 **`wal_keep_size` too small** — soft cushion fails under load/outage; prefer slots as the real contract.
 
-👉 **Rebuild** — wipe standby `PGDATA`, run `pg_basebackup -R -X stream`, attach a slot, verify `streaming`.
+👉 **Rebuild** — wipe `standby` `PGDATA`, run `pg_basebackup -R -X stream`, attach a slot, verify `streaming`.
 
 ---
 

@@ -1,14 +1,13 @@
 # Checkpoint
 
-👉 A **checkpoint** is a point in the WAL stream where PostgreSQL guarantees that all data changes before that point 
-have been written to the data files in `base/`.
+A **checkpoint** is a cut point in the WAL stream. Past that point, PostgreSQL has already flushed the matching 
+changes into the data files under `base/`.
 
-👉 Think of it as PostgreSQL saying:
+In plain terms:
 
-> "Everything that happened **before this point** is now safely written into the real table files under `base/`. 
-> Do not need old WAL just to recover that part anymore."
+> "Everything before this LSN is safely in `base/`. I do not need older WAL just to recover this server."
 
-👉 The **Checkpointer** background process is responsible for creating checkpoints.
+The **Checkpointer** background process creates checkpoints.
 
 Builds on [2_WAL.md](./2_WAL.md) (WAL lifecycle, recycling) and [3_Commit_Flow.md](./3_Commit_Flow.md) (when dirty 
 pages are created).
@@ -84,7 +83,7 @@ the changes from when they were committed; the checkpoint catches `base/` up.
 
 A common misconception: "checkpoint marks each WAL record as done, so that WAL will never be used."
 
-What actually happens: the checkpoint records a **position in the WAL stream** (an LSN):
+In practice, the checkpoint records a **position in the WAL stream** (an LSN):
 
 > "At LSN `0/3000000`, all changes **before** this point are safely in `base/`."
 

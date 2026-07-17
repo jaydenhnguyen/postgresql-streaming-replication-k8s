@@ -1,10 +1,10 @@
 # Log Sequence Number (LSN)
 
-👉 An **LSN (Log Sequence Number)** is a pointer to a **byte position in the WAL stream**. Every WAL record has one - it 
-identifies exactly *where* in the log that record lives.
+An **LSN** is a pointer to a **byte position in the WAL stream**. Every WAL record has one - it marks exactly where 
+that record sits in the log.
 
-👉 LSNs are the "ruler" of PostgreSQL replication: they measure how far the WAL has been written on the `primary`, 
-how far the `standby` has replayed, and how many bytes apart the two are (**replication lag**).
+Think of LSNs as the ruler for replication: how far the `primary` has written, how far the `standby` has replayed, 
+and how many bytes sit between them (**replication lag**).
 
 Builds on [2_WAL.md](./2_WAL.md) (WAL records, segments) and [3_Commit_Flow.md](./3_Commit_Flow.md) (when WAL is 
 written).
@@ -106,7 +106,7 @@ The WAL "tape" cut into 16 MB segment files:
 ---
 
 ## The Three Key Functions
-### ✨ `pg_current_wal_lsn()` - run on the `PRIMARY`
+### ✨ `pg_current_wal_lsn()` - run on the `primary`
 
 Returns the position where the `primary` is **currently writing** WAL.
 
@@ -354,9 +354,9 @@ If the write loop reported 100 successful commits but the promoted node contains
 
 Then tie the count to the WAL state:
 
-> "The old primary acknowledged 100 inserts, but the promoted standby contains 96. Four rows were lost because their 
-> WAL had not been replayed on the standby before promotion. The LSN gap at promotion (replay `0/3000000` vs primary 
-> `0/3000A00`, 2560 bytes) confirms the standby was behind."
+> "The old `primary` acknowledged 100 inserts, but the promoted `standby` contains 96. Four rows were lost because their 
+> WAL had not been replayed on the `standby` before promotion. The LSN gap at promotion (replay `0/3000000` vs `primary` 
+> `0/3000A00`, 2560 bytes) confirms the `standby` was behind."
 
 ### The lost rows may still exist - on the old `primary`
 

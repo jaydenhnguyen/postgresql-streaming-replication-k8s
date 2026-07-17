@@ -1,10 +1,10 @@
-# 1. PostgreSQL  Architecture
+# PostgreSQL Architecture
 
-It is important to understand how PostgreSQL is organized internally. Many replication features such as `pg_basebackup`,
-WAL, and replication slots operate at the **cluster level**, not at the individual database level.
+Replication features like `pg_basebackup`, WAL, and replication slots work on the **whole cluster**, not on one 
+database. This note covers how PostgreSQL is laid out so those pieces make sense later.
 
 
-![PostgreSQL  Architecture](./assets/1_architecture.png)
+![PostgreSQL Architecture](./assets/1_architecture.png)
 
 ---
 
@@ -119,32 +119,31 @@ Execute SQL
 ```
 
 #### ✨ WAL Writer
-Responsible for writing WAL records to the `pg_wal` directory.
+Writes WAL records to the `pg_wal` directory.
 
-This guarantees that every committed transaction is first recorded in the Write-Ahead Log before the actual database 
-files are updated.
+That is what makes commits durable: the change hits WAL on disk before the data files catch up.
 
 #### ✨ Checkpointer
 Periodically flushes modified pages from memory to the database files on disk.
 
-This process creates checkpoints, which are essential for crash recovery and WAL recycling.
+Those checkpoints matter for crash recovery and WAL recycling.
 
 #### ✨ WAL Sender
-Runs only on the **Primary**.
+Runs only on the `primary`.
 
-Responsible for reading WAL records from `pg_wal` and streaming them to connected standby servers.
+Reads WAL from `pg_wal` and streams it to connected `standby` servers.
 
-There is typically **one WAL Sender process per connected standby**.
+Usually **one WAL Sender per connected `standby`**.
 
 #### ✨ WAL Receiver
-Runs only on the **Standby**.
+Runs only on the `standby`.
 
-Responsible for receiving WAL records from the Primary over the network.
+Receives WAL from the `primary` over the network.
 
 #### ✨ Startup Process
-Runs only on the **Standby**.
+Runs only on the `standby`.
 
-Responsible for replaying the received WAL records and applying the changes to the standby database.
+Replays the received WAL and applies it to the `standby` database.
 
 
 ### Process Flow During Streaming Replication
@@ -199,9 +198,9 @@ Responsible for replaying the received WAL records and applying the changes to t
 👉 The **Checkpointer** writes dirty pages to the data files.
 
 👉 During streaming replication:
-- **WAL Sender** exists on the Primary.
-- **WAL Receiver** exists on the Standby.
-- The **Startup Process** replays WAL to keep the standby synchronized.
+- **WAL Sender** exists on the `primary`.
+- **WAL Receiver** exists on the `standby`.
+- The **Startup Process** replays WAL to keep the `standby` synchronized.
 
 ---
 
@@ -292,7 +291,7 @@ This directory is one of the most important components of PostgreSQL.
 ### ‼️ `pg_replslot/`
 Stores metadata for replication slots.
 
-Each slot records **how far a replication consumer (.e.g: standby, ...) has progressed**.
+Each slot records **how far a replication consumer (.e.g: `standby`, ...) has progressed**.
 
 It **does not** store WAL itself.
 
@@ -423,233 +422,38 @@ Example:
 
 ---
 
-## References:
+
+---
+
+## References
+
 - [Medium - PostgreSQL Architecture](https://medium.com/@sumeet.k.shukla/postgresql-architecture-6df259dc1145)
 
+---
 
+## Notes in this series
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## 6. Write-Ahead Logging (WAL)
-
-- Why WAL exists
-- WAL vs Data Files
-- WAL Record
-- WAL Segment
-- WAL Directory (`pg_wal`)
-- WAL Lifecycle
-- WAL Recycling
-- Checkpoint
-- Crash Recovery
+| #  | Note                                                                         | What it covers                                              |
+|----|------------------------------------------------------------------------------|-------------------------------------------------------------|
+| 1  | [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md)               | Cluster, processes, `PGDATA`, `pg_hba.conf`                 |
+| 2  | [2_WAL.md](./2_WAL.md)                                                       | WAL records, segments, lifecycle, recycling, crash recovery |
+| 3  | [3_Commit_Flow.md](./3_Commit_Flow.md)                                       | What happens on `INSERT` + `COMMIT`                         |
+| 4  | [4_LSN.md](./4_LSN.md)                                                       | LSN, lag in bytes, row-loss accounting                      |
+| 5  | [5_Checkpoint.md](./5_Checkpoint.md)                                         | Checkpoints, timeout vs `max_wal_size`, bgwriter            |
+| 6  | [6_Replication_Slots.md](./6_Replication_Slots.md)                           | Slots, retention, disk risk                                 |
+| 7  | [7_Base_Backup.md](./7_Base_Backup.md)                                       | `pg_basebackup`, seeding a `standby`                        |
+| 8  | [8_Standby_Initialization.md](./8_Standby_Initialization.md)                 | `standby.signal`, `primary_conninfo`, recovery mode         |
+| 9  | [9_Promotion.md](./9_Promotion.md)                                           | Promote `standby` → `primary`, prevent data loss            |
+| 10 | [10_Replication_Failure_Scenarios.md](./10_Replication_Failure_Scenarios.md) | Partition, offline, WAL removed, rebuild                    |
 
 ---
 
-## 7. Streaming Replication
+## Still to learn (later)
 
-- Primary
-- Standby
-- Read-only Standby
-- Streaming Replication
-- Physical Replication
-- Asynchronous Replication
-- WAL Shipping
-- WAL Streaming
-- WAL Sender
-- WAL Receiver
-
----
-
-## 8. Log Sequence Number (LSN)
-
-- What is LSN
-- Why LSN exists
-- `pg_current_wal_lsn()`
-- `pg_last_wal_replay_lsn()`
-- `pg_wal_lsn_diff()`
-- Measuring Replication Lag
-
----
-
-## 9. Replication Slots
-
-- What is a Replication Slot
-- Physical Replication Slot
-- Logical Replication Slot (future)
-- Slot Metadata
-- `pg_replslot`
-- Slot vs WAL
-- Slowest Standby Rule
-- Disk Full Risk
-
----
-
-## 10. Base Backup
-
-- `pg_basebackup`
-- Full Cluster Copy
-- Consistent Backup
-- Why it runs only once
-- Why it needs a replication role
-- Why it uses the replication protocol
-
-### Important Flags
-
-- `-D`
-- `-R`
-- `-X stream`
-- `-P`
-
----
-
-## 11. Standby Initialization
-
-- `standby.signal`
-- `primary_conninfo`
-- Standby Startup Sequence
-- Recovery Mode
-- `pg_is_in_recovery()`
-
----
-
-## 12. Replication Connection Flow
-
-```text
-Standby
-      │
-      │ TCP
-      ▼
-Docker Network
-      │
-      ▼
-Primary
-      │
-      ▼
-pg_hba.conf
-      │
-      ▼
-Role Authentication
-      │
-      ▼
-Replication Protocol
-      │
-      ▼
-WAL Streaming
-```
-
----
-
-## 13. Replication Failure Scenarios
-
-- Network Partition
-- Standby Offline
-- WAL Removed
-- Missing Replication Slot
-- `wal_keep_size` Too Small
-- Rebuild using `pg_basebackup`
-
----
-
-## 14. Security
-
-- Why `listen_addresses='*'`
-- Production Networking
-- Restricting `pg_hba.conf`
-- Least Privilege
-- Replication User
-- Password Storage
-- SCRAM
-- Secrets
-
----
-
-## 15. Useful Commands
-
-### Configuration
-
-```sql
-SHOW ...
-```
-
-```sql
-ALTER SYSTEM ...
-```
-
-### Roles
-
-```sql
-CREATE ROLE
-```
-
-```sql
-\du
-```
-
-### WAL
-
-```sql
-SELECT pg_current_wal_lsn();
-```
-
-### Replication
-
-```sql
-SELECT * FROM pg_stat_replication;
-```
-
-### Recovery
-
-```sql
-SELECT pg_is_in_recovery();
-```
-
-### Settings
-
-```sql
-SELECT * FROM pg_settings;
-```
-
----
-
-## 16. Concepts Still To Learn
-
-- Checkpoints
-- WAL Internals
-- WAL Record Format
-- Timeline
-- Promotion
-- Failover
-- Split Brain
-- Synchronous Replication
-- Logical Replication
-- Replication Slots in Production
-- Archiving
-- Point-in-Time Recovery (PITR)
-- Hot Standby Feedback
-- Vacuum and Replication
-- Replication Lag Monitoring
-- Cascading Replication
-- Replication Timeout
-- PostgreSQL on Kubernetes
-- StatefulSets for PostgreSQL
-- PVCs and Persistent Storage
-- Services for Primary/Standby
-- Failover Service Switching
-- High Availability Patterns
-- Patroni (for comparison)
-- CloudNativePG (for comparison)
+- Timeline internals (deeper)
+- Logical replication / CDC
+- WAL archiving and PITR
+- Hot Standby feedback, vacuum vs replication
+- Cascading replication
+- PostgreSQL on Kubernetes (StatefulSets, PVCs, Services) — project build
+- HA tools for comparison: Patroni, CloudNativePG

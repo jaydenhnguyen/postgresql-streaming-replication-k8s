@@ -1,7 +1,7 @@
-# `standby` Initialization
+# Standby Initialization
 
 After `pg_basebackup` seeds the data directory (see [7_Base_Backup.md](./7_Base_Backup.md)), what makes the new 
-server start as a **standby** instead of a normal `primary`? Two things:
+server start as a `standby` instead of a normal `primary`? Two things:
 
 1. **`standby.signal`** - a file that says "start in recovery mode"
 2. **`primary_conninfo`** - a setting that says "here is where to stream WAL from"
@@ -196,10 +196,10 @@ The one-query role check:
 SELECT pg_is_in_recovery();
 ```
 
-| Result | Meaning                                                                     |
-|--------|-----------------------------------------------------------------------------|
-| `t`    | This server is in recovery mode → **`standby`** (replaying WAL, read-only)  |
-| `f`    | This server is not in recovery → **`primary`** (generating WAL, read-write) |
+| Result | Meaning                                                                 |
+|--------|-------------------------------------------------------------------------|
+| `t`    | This server is in recovery mode → `standby` (replaying WAL, read-only)  |
+| `f`    | This server is not in recovery → `primary` (generating WAL, read-write) |
 
 ### The promotion flip
 
@@ -280,7 +280,7 @@ is exactly why the seeding step must be skipped when `pgdata` already exists.
 ## References
 
 - [7_Base_Backup.md](./7_Base_Backup.md) - seeding, the `-R` flag
-- [9_Promotion.md](./9_Promotion.md) - promote standby → primary, prevent data loss
+- [9_Promotion.md](./9_Promotion.md) - promote `standby` → `primary`, prevent data loss
 - [2_WAL.md](./2_WAL.md) - WAL replay, crash recovery
 - [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md) - Startup Process, WAL Receiver, WAL Sender
 - [6_Replication_Slots.md](./6_Replication_Slots.md) - `primary_slot_name`
