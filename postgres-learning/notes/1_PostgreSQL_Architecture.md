@@ -435,7 +435,7 @@ Example:
 
 | #  | Note                                                                         | What it covers                                              |
 |----|------------------------------------------------------------------------------|-------------------------------------------------------------|
-| 0  | [0_Lab_Bootstrap_Primary_Standby.md](0_Bootstrap_Primary_Standby.md)         | Hands-on: launch `primary` + `standby` from scratch         |
+| 0  | [0_Bootstrap_Primary_Standby.md](./0_Bootstrap_Primary_Standby.md)           | Deep walkthrough: launch `primary` + `standby` from scratch |
 | 1  | [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md)               | Cluster, processes, `PGDATA`, `pg_hba.conf`                 |
 | 2  | [2_WAL.md](./2_WAL.md)                                                       | WAL records, segments, lifecycle, recycling, crash recovery |
 | 3  | [3_Commit_Flow.md](./3_Commit_Flow.md)                                       | What happens on `INSERT` + `COMMIT`                         |
@@ -446,6 +446,8 @@ Example:
 | 8  | [8_Standby_Initialization.md](./8_Standby_Initialization.md)                 | `standby.signal`, `primary_conninfo`, recovery mode         |
 | 9  | [9_Promotion.md](./9_Promotion.md)                                           | Promote `standby` → `primary`, prevent data loss            |
 | 10 | [10_Replication_Failure_Scenarios.md](./10_Replication_Failure_Scenarios.md) | Partition, offline, WAL removed, rebuild                    |
+
+**Hands-on labs (do these):** [`../lab/README.md`](../lab/README.md) — Labs 00–12 with observation logs, outcomes, and project-demo mapping.
 
 ---
 
