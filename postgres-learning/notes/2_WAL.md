@@ -274,14 +274,14 @@ These two size settings look similar but do **completely different jobs** - see 
 Both talk about "how much WAL" and both are measured in size - that is why they get mixed up. One controls 
 **when to checkpoint**; the other controls **how much WAL to keep for standbys**.
 
-|                         | `max_wal_size`                                              | `wal_keep_size`                                              |
-|-------------------------|-------------------------------------------------------------|--------------------------------------------------------------|
-| **Main purpose**        | Trigger an earlier **checkpoint** when WAL grows fast       | Soft **retention cushion** for standbys without a slot       |
-| **Audience**            | This server (crash recovery / flush cadence)                | Replication consumers (`standbys`)                           |
-| **When it "fires"**     | Estimated WAL between checkpoints approaches the limit      | Soft floor: try to keep about this much recent WAL around    |
-| **What happens**        | Checkpoint runs → dirty pages flush → old WAL *can* recycle | Segments that would otherwise recycle are kept a bit longer  |
-| **Protects standbys?**  | **No** - after the checkpoint, WAL can still be recycled    | **Weakly** - only a soft cushion, not a hard contract        |
-| **Reliable for HA?**    | N/A - wrong tool for replication lag                        | No - prefer a **replication slot**                           |
+|                         | `max_wal_size`                                                        | `wal_keep_size`                                                                 |
+|-------------------------|-----------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| **Main purpose**        | Trigger an earlier **checkpoint** when WAL grows fast                 | Try to keep some recent WAL on disk so a lagging `standby` (with **no** slot) still has a chance to catch up |
+| **Audience**            | This server (crash recovery / flush cadence)                          | Replication consumers (`standbys`)                                              |
+| **When it "fires"**     | Estimated WAL between checkpoints approaches the limit                | After a checkpoint: "keep about this much recent WAL before recycling older files" |
+| **What happens**        | Checkpoint runs → dirty pages flush → old WAL *can* recycle           | Old WAL files that the `primary` no longer needs for itself are **not deleted/recycled yet** - they stay a while longer for standbys |
+| **Protects standbys?**  | **No** - after the checkpoint, WAL can still be recycled              | **Only a little** - best-effort. Under heavy writes the `primary` can still recycle WAL the `standby` needs |
+| **Reliable for HA?**    | **No** - this setting is not for replication safety                   | **No** - use a **replication slot** if you need a real guarantee                |
 
 ```
 max_wal_size (checkpoint trigger):
@@ -293,7 +293,7 @@ max_wal_size (checkpoint trigger):
                                       Checkpoint NOW
                                       (then recycle what local recovery no longer needs)
 
-wal_keep_size (standby cushion):
+wal_keep_size (extra WAL kept for standbys):
 
   After a checkpoint, "can I recycle this old segment?"
        │
@@ -303,20 +303,31 @@ wal_keep_size (standby cushion):
 
 ### Easy mental model
 
-- **`max_wal_size`** → "Don't let unrecovered WAL pile up too high on **this** server → checkpoint sooner."
-- **`wal_keep_size`** → "Even after a checkpoint, keep a little extra WAL around in case a `standby` is behind."
-- **Replication slot** → "Keep **exactly** what this consumer still needs" (the real contract - see 
-  [6_Replication_Slots.md](./6_Replication_Slots.md)).
+Think of two different questions:
+
+| Setting | Question it answers | Everyday analogy |
+|---------|---------------------|------------------|
+| **`max_wal_size`** | "WAL is piling up fast on **this** server - should I checkpoint **sooner** so I can clean up?" | A full inbox → you file papers earlier so the desk stays usable |
+| **`wal_keep_size`** | "I already checkpointed. Should I still **keep some old WAL files** around for a slow `standby`?" | After filing, you keep the last few days of drafts in a drawer "just in case" - not a locked vault |
+| **Replication slot** | "This exact `standby` still needs WAL from position X - **do not** remove it." | A named hold on those drafts until that person picks them up - see [6_Replication_Slots.md](./6_Replication_Slots.md) |
 
 ```
-Who decides whether a WAL segment can disappear?
+Simple story:
 
-  1. Checkpoint says: "local recovery no longer needs it"     ← max_wal_size helps cause this sooner
-  2. wal_keep_size says: "keep roughly this much recent WAL"  ← soft standby cushion
-  3. Slot says: "consumer X still needs from restart_lsn"     ← hard standby contract
+  1. Writes happen → WAL grows
+  2. max_wal_size (or timeout) → checkpoint → primary's own base/ is caught up
+  3. Primary asks: "Can I recycle old WAL now?"
+        - wal_keep_size: "Keep roughly the last N MB anyway"   ← polite request, can fail under load
+        - slot:          "Keep everything past restart_lsn"    ← hard rule
 
-A segment is recycled only when NOTHING still needs it.
+  A WAL file is recycled only when nothing still needs it.
 ```
+
+👉 Short version:
+
+- **`max_wal_size`** = "checkpoint earlier when WAL gets big"
+- **`wal_keep_size`** = "after checkpoint, try to keep some recent WAL for standbys"
+- **Slot** = "must keep WAL until this standby has it"
 
 ### Common mix-up
 
@@ -324,9 +335,9 @@ A segment is recycled only when NOTHING still needs it.
 
 **Wrong.** Raising `max_wal_size` only delays checkpoints. Once a checkpoint runs, WAL before the cut point can still 
 be recycled - `max_wal_size` does **not** pin WAL for standbys. For replication safety use a **slot** (and optionally 
-`wal_keep_size` as a secondary cushion).
+`wal_keep_size` as a weak backup).
 
-👉 **`max_wal_size` = when to checkpoint. `wal_keep_size` = soft how-much-to-keep for standbys. Do not use one as a 
+👉 **`max_wal_size` = when to checkpoint. `wal_keep_size` = try to keep some WAL for standbys. Do not use one as a 
 substitute for the other.**
 
 For `max_wal_size` vs the **time** trigger, see 
@@ -603,8 +614,9 @@ difference is the source: local `pg_wal/` after a crash vs. network stream from 
 
 👉 WAL records are grouped into **16 MB segments** stored in `pg_wal/`.
 
-👉 **`max_wal_size`** forces an earlier checkpoint when WAL grows fast. **`wal_keep_size`** is a soft retention 
-cushion for standbys. They are not interchangeable - slots are the real replication contract.
+👉 **`max_wal_size`** forces an earlier checkpoint when WAL grows fast. **`wal_keep_size`** tries to keep some recent 
+WAL around for standbys (best-effort, not a guarantee). They are not interchangeable - slots are the real replication 
+contract.
 
 👉 The **WAL Writer** flushes WAL to disk; the **Checkpointer** flushes data pages to `base/` - see [5_Checkpoint.md](./5_Checkpoint.md).
 
