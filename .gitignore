@@ -1,3 +1,37 @@
-/.idea/
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Course / local study artifacts
 /postgres-learning/data/
 /problem.pdf
+
+# SSH private keys (never commit)
+*.pem
+*.key
+id_rsa
+id_ed25519
+**/keys/*
+!**/keys/.gitkeep
+!**/keys/*.pub
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Terraform variable files (may contain paths / secrets)
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
