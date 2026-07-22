@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-write
+  namespace: pg-${STUDENT_ID}
+
+  labels:
+    app: postgres
+    role: write
+
+spec:
+  type: ClusterIP
+
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+
+  selector:
+    app: postgres
+    role: primary
+    student-id: ${STUDENT_ID}
