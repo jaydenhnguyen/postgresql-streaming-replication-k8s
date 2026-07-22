@@ -3,6 +3,7 @@ kind: ConfigMap
 metadata:
   name: pg-config-${STUDENT_ID}
   namespace: pg-${STUDENT_ID}
+
 data:
   postgresql.conf: |
     listen_addresses = '*'

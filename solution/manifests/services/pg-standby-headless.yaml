@@ -3,16 +3,20 @@ kind: Service
 metadata:
   name: pg-standby-hs
   namespace: pg-${STUDENT_ID}
+
   labels:
     app: postgres
     role: standby
+
 spec:
   clusterIP: None
   publishNotReadyAddresses: true
+
   ports:
     - name: postgres
       port: 5432
       targetPort: 5432
+
   selector:
     app: postgres
     role: standby

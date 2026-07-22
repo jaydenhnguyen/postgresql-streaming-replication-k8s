@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pg-primary-${STUDENT_ID}
+  namespace: pg-${STUDENT_ID}
+  labels:
+    app: postgres
+    role: primary
+    student-id: ${STUDENT_ID}
+
+spec:
+  serviceName: pg-primary-hs
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: postgres
+      role: primary
+      student-id: ${STUDENT_ID}
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: primary
+        student-id: ${STUDENT_ID}
+
+    spec:
+      nodeSelector:
+        workload: postgres
+        postgres-node: node-a
+
+      containers:
+        - name: postgres
+          image: postgres:18
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+
+          args:
+            - postgres
+            - -c
+            - config_file=/etc/postgres-config/postgresql.conf
+            - -c
+            - hba_file=/etc/postgres-config/pg_hba.conf
+
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+
+            - name: config
+              mountPath: /etc/postgres-config
+              readOnly: true
+
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-creds-${STUDENT_ID}
+                  key: POSTGRES_USER
+
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-creds-${STUDENT_ID}
+                  key: POSTGRES_USER
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-creds-${STUDENT_ID}
+                  key: POSTGRES_PASSWORD
+
+            - name: PGDATA
+              value: /var/lib/postgresql/18/docker
+
+          readinessProbe:
+            exec:
+              command: ["pg_isready"]
+
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+
+          livenessProbe:
+            exec:
+              command: ["pg_isready"]
+
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+      volumes:
+        - name: config
+          configMap:
+            name: pg-config-${STUDENT_ID}
+
+            items:
+              - key: postgresql.conf
+                path: postgresql.conf
+              - key: pg_hba.conf
+                path: pg_hba.conf
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+
+        labels:
+          app: postgres
+          role: primary
+          student-id: ${STUDENT_ID}
+
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
