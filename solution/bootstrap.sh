@@ -2,13 +2,21 @@
 # Local kind bootstrap: primary + standby streaming replication.
 set -euo pipefail
 
-# Script dir (= solution/); project root is one level up.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${ROOT}/.." && pwd)"
 cd "$ROOT"
 
-# CLI arg > env > default student id.
-STUDENT_ID="${1:-${STUDENT_ID:-hdhnguyen}}"
+# Task 9: student ID from $1 or STUDENT_ID (required - no silent hardcode for grading).
+if [[ -n "${1:-}" ]]; then
+  STUDENT_ID="$1"
+elif [[ -n "${STUDENT_ID:-}" ]]; then
+  :
+else
+  echo "Usage: ./bootstrap.sh <studentID>" >&2
+  echo "   or: STUDENT_ID=<id> ./bootstrap.sh" >&2
+  exit 1
+fi
+
 CLUSTER_NAME="${CLUSTER_NAME:-pg-replication}"
 NS="pg-${STUDENT_ID}"
 PRIMARY_POD="pg-primary-${STUDENT_ID}-0"
@@ -51,7 +59,6 @@ step() {
   printf '%s%s%s\n' "${C_CYAN}${C_BOLD}" "└${line}┘" "${C_RESET}"
 }
 
-# Flush-left so bootstrap lines line up with kubectl/psql output.
 sep()  { printf '%s----%s\n' "${C_DIM}" "${C_RESET}"; }
 ok()   { sep; printf '%s✓ %s%s\n' "${C_GREEN}" "$*" "${C_RESET}"; }
 info() { printf '%s%s%s\n' "${C_DIM}" "$*" "${C_RESET}"; }
@@ -63,12 +70,19 @@ need() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
 
+elapsed() {
+  local now
+  now="$(date +%s)"
+  echo "$((now - BOOTSTRAP_START))s"
+}
+
 step "Checking prerequisites"
 need kind
 need kubectl
 need envsubst
 need openssl
 need mktemp
+need docker
 info "student id : ${STUDENT_ID}"
 info "namespace  : ${NS}"
 info "cluster    : ${CLUSTER_NAME}"
@@ -86,12 +100,9 @@ else
   warn "no $(rel "${CREDS_FILE}") — copy .env.example → .env or passwords will be random"
 fi
 
-# Use file/env values if set; else generate (never printed).
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)}"
 REPLICATION_PASSWORD="${REPLICATION_PASSWORD:-$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)}"
 export STUDENT_ID POSTGRES_PASSWORD REPLICATION_PASSWORD
-
-# Confirm keys exist without revealing values.
 [[ -n "${POSTGRES_PASSWORD}" ]] || die "POSTGRES_PASSWORD is empty"
 [[ -n "${REPLICATION_PASSWORD}" ]] || die "REPLICATION_PASSWORD is empty"
 ok "credentials ready (values not printed)"
@@ -137,7 +148,7 @@ apply() {
   kubectl apply -f "${GEN}/${path}"
 }
 
-step "Applying namespace / config / secret / services"
+step "Applying namespace / ConfigMaps / Secret / Services"
 apply manifests/namespace.yaml
 apply manifests/config/secret.yaml
 apply manifests/config/configmap.yaml
@@ -157,7 +168,7 @@ kubectl wait --for=condition=Ready "pod/${PRIMARY_POD}" -n "${NS}" --timeout=300
 kubectl get pods,pvc -n "${NS}" -o wide
 ok "primary is Ready"
 
-step "Ensuring role repl on primary"
+step "Ensuring the replication role 'repl' on primary DB (Task 4)"
 # TCP localhost → pg_hba trust; password from env (same as Secret).
 kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
   psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
@@ -172,7 +183,7 @@ END
 \$\$;"
 ok "role repl ready"
 
-step "Applying standby StatefulSet"
+step "Applying standby StatefulSet (initContainer pg_basebackup)"
 apply manifests/statefulsets/pg-standby.yaml
 ok "standby StatefulSet applied"
 
@@ -182,6 +193,7 @@ kubectl wait --for=condition=Ready "pod/${STANDBY_POD}" -n "${NS}" --timeout=600
 kubectl get pods,pvc -n "${NS}" -o wide
 ok "standby is Ready"
 
+# Task 6 schema: events_<id>(id serial, tag text, created_at timestamptz default now())
 step "Seed (1/3) — create database clo835"
 kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
   psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
@@ -211,7 +223,7 @@ kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
 ok "seed data ready"
 
 step "Verifying streaming replication"
-info "primary — pg_stat_replication"
+info "primary - pg_stat_replication"
 kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
   psql -h localhost -U postgres -d postgres -c \
   "SELECT application_name, state, sync_state, replay_lsn,
@@ -234,7 +246,10 @@ info "GEN       : $(rel "${GEN}")"
 info "Secret    : pg-creds-${STUDENT_ID} (in-cluster)"
 info "Tear down : ./destroy.sh ${STUDENT_ID}"
 
-# Copy-paste helpers (values already filled for this run).
+step "Healthy cluster summary"
+kubectl get pods,pvc -n "${NS}" -o wide
+ok "bootstrap healthy in $(elapsed) (target < 15 min)"
+
 step "Copy-paste commands"
 cat <<EOF
 
@@ -249,8 +264,28 @@ kubectl exec -it -n ${NS} ${STANDBY_POD} -- psql -h localhost -U postgres -d clo
 # Once already inside bash on a pod:
 psql -h localhost -U postgres -d clo835
 
+# Task 7 — streaming check
+kubectl exec -n ${NS} ${PRIMARY_POD} -- \\
+  psql -h localhost -U postgres -c "SELECT state, sync_state, replay_lsn FROM pg_stat_replication;"
+
+# Task 11 — lag check (side by side)
+echo "primary LSN:"; kubectl exec -n ${NS} ${PRIMARY_POD} -- \\
+  psql -h localhost -U postgres -Atq -c "SELECT pg_current_wal_lsn();"
+echo "standby replay LSN:"; kubectl exec -n ${NS} ${STANDBY_POD} -- \\
+  psql -h localhost -U postgres -Atq -c "SELECT pg_last_wal_replay_lsn();"
+kubectl exec -n ${NS} ${PRIMARY_POD} -- psql -h localhost -U postgres -c "\\
+  SELECT pg_current_wal_lsn() AS primary_lsn,\\
+         replay_lsn AS standby_replay_lsn,\\
+         pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS lag_bytes\\
+  FROM pg_stat_replication;"
+
+# Seed peek (your ID in tags)
+kubectl exec -n ${NS} ${PRIMARY_POD} -- \\
+  psql -h localhost -U postgres -d clo835 -c "SELECT * FROM events_${STUDENT_ID} LIMIT 5;"
+
 # Tear down
 ./destroy.sh ${STUDENT_ID}
 
 EOF
+
 printf '%s%s%s\n' "${C_GREEN}${C_BOLD}" "Done." "${C_RESET}"

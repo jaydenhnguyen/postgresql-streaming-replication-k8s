@@ -18,16 +18,15 @@ data:
       exit 0
     fi
 
-    echo "Waiting up to 10s for primary host to accept connections..."
     echo "Checking PRIMARY_HOST=${PRIMARY_HOST}:5432"
-    deadline=$((SECONDS + 10))
+    echo "Waiting up to 120s for primary to accept connections..."
+    deadline=$((SECONDS + 120))
     until pg_isready -h "${PRIMARY_HOST}" -p 5432 -U postgres; do
       if (( SECONDS >= deadline )); then
-        echo "ERROR: primary host '${PRIMARY_HOST}' did not become ready within 10 seconds" >&2
+        echo "ERROR: primary '${PRIMARY_HOST}' not ready within 120s" >&2
         exit 1
       fi
-      echo "Primary not ready yet; retrying... (${SECONDS}s elapsed)"
-      sleep 1
+      sleep 2
     done
     echo "Primary host '${PRIMARY_HOST}' is ready"
 

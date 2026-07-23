@@ -65,7 +65,7 @@ spec:
               mountPath: /scripts
               readOnly: true
 
-          command: ["/scripts/pg-basebackup.sh"]
+          command: ["/bin/bash", "/scripts/pg-basebackup.sh"]
 
       containers:
         - name: postgres
@@ -98,6 +98,12 @@ spec:
 
             - name: PGDATA
               value: /var/lib/postgresql/18/docker
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-creds-${STUDENT_ID}
+                  key: POSTGRES_PASSWORD
 
           readinessProbe:
             exec:
