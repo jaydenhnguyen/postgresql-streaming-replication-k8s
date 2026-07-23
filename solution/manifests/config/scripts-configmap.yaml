@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pg-scripts-${STUDENT_ID}
+  namespace: pg-${STUDENT_ID}
+data:
+  pg-basebackup.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "PGDATA=${PGDATA}"
+    echo "Primary host=${PRIMARY_HOST}"
+    echo "Slot=${SLOT_NAME}"
+
+    # Skip if a cluster already exists (pod restart / PVC reuse)
+    if [ -f "${PGDATA}/PG_VERSION" ] || [ -f "${PGDATA}/standby.signal" ]; then
+      echo "Existing PGDATA found, skipping pg_basebackup"
+      exit 0
+    fi
+
+    echo "Waiting up to 10s for primary host to accept connections..."
+    echo "Checking PRIMARY_HOST=${PRIMARY_HOST}:5432"
+    deadline=$((SECONDS + 10))
+    until pg_isready -h "${PRIMARY_HOST}" -p 5432 -U postgres; do
+      if (( SECONDS >= deadline )); then
+        echo "ERROR: primary host '${PRIMARY_HOST}' did not become ready within 10 seconds" >&2
+        exit 1
+      fi
+      echo "Primary not ready yet; retrying... (${SECONDS}s elapsed)"
+      sleep 1
+    done
+    echo "Primary host '${PRIMARY_HOST}' is ready"
+
+    mkdir -p "${PGDATA}"
+    echo "Running pg_basebackup..."
+    pg_basebackup \
+      -h "${PRIMARY_HOST}" \
+      -p 5432 \
+      -U "${REPLICATION_USER}" \
+      -D "${PGDATA}" \
+      -R \
+      -X stream \
+      -P \
+      -C \
+      -S "${SLOT_NAME}"
+
+    echo "pg_basebackup complete"
+    ls -la "${PGDATA}"
+    test -f "${PGDATA}/standby.signal"
+    grep -q primary_conninfo "${PGDATA}/postgresql.auto.conf"
+    echo "standby.signal and primary_conninfo OK"

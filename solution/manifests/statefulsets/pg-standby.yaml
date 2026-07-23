@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pg-standby-${STUDENT_ID}
+  namespace: pg-${STUDENT_ID}
+  labels:
+    app: postgres
+    role: standby
+    student-id: ${STUDENT_ID}
+
+spec:
+  serviceName: pg-standby-hs
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: postgres
+      role: standby
+      student-id: ${STUDENT_ID}
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: standby
+        student-id: ${STUDENT_ID}
+
+    spec:
+      nodeSelector:
+        workload: postgres
+        postgres-node: node-b
+
+      initContainers:
+        - name: pg-basebackup
+          image: postgres:18
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/18/docker
+
+            - name: PRIMARY_HOST
+              value: pg-primary-${STUDENT_ID}-0.pg-primary-hs
+
+            - name: SLOT_NAME
+              value: standby_${STUDENT_ID}
+
+            - name: REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-creds-${STUDENT_ID}
+                  key: REPLICATION_USER
+
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-creds-${STUDENT_ID}
+                  key: REPLICATION_PASSWORD
+
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+
+          command: ["/scripts/pg-basebackup.sh"]
+
+      containers:
+        - name: postgres
+          image: postgres:18
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+
+          args:
+            - postgres
+            - -c
+            - config_file=/etc/postgres-config/postgresql.conf
+            - -c
+            - hba_file=/etc/postgres-config/pg_hba.conf
+
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+
+            - name: config
+              mountPath: /etc/postgres-config
+              readOnly: true
+
+          env:
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-creds-${STUDENT_ID}
+                  key: POSTGRES_USER
+
+            - name: PGDATA
+              value: /var/lib/postgresql/18/docker
+
+          readinessProbe:
+            exec:
+              command: ["pg_isready"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+
+          livenessProbe:
+            exec:
+              command: ["pg_isready"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+      volumes:
+        - name: config
+          configMap:
+            name: pg-config-${STUDENT_ID}
+            items:
+              - key: postgresql.conf
+                path: postgresql.conf
+              - key: pg_hba.conf
+                path: pg_hba.conf
+
+        - name: scripts
+          configMap:
+            name: pg-scripts-${STUDENT_ID}
+            defaultMode: 0755
+            items:
+              - key: pg-basebackup.sh
+                path: pg-basebackup.sh
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: postgres
+          role: standby
+          student-id: ${STUDENT_ID}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
