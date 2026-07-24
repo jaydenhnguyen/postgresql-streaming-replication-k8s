@@ -1,4 +1,4 @@
-# Lab 00 — Bootstrap Primary + Standby
+# Lab 00 - Bootstrap Primary + Standby
 
 **Goal:** From a clean machine, bring up a streaming pair: writable `primary`, read-only `standby`, proven replication.
 

@@ -1,4 +1,4 @@
-# Lab 10 — Sync vs Async Commit
+# Lab 10 - Sync vs Async Commit
 
 **Goal:** Feel the durability vs availability tradeoff: async can lose acked commits on failover; sync waits for the standby (and can block).
 
@@ -126,7 +126,7 @@ SQL
 
 ## Takeaway
 
-> Sync buys **zero loss of acked commits** and sells **availability** — the insert loop stalls if the sync standby is gone.
+> Sync buys **zero loss of acked commits** and sells **availability** - the insert loop stalls if the sync standby is gone.
 
 
 

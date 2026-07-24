@@ -1,4 +1,4 @@
-# Lab 08 — Network Partition Simulation
+# Lab 08 - Network Partition Simulation
 
 **Goal:** Simulate loss of connectivity between `primary` and `standby`, watch stats, then restore and catch up.
 
@@ -65,7 +65,7 @@ SQL
 | During partition | Value |
 |------------------|-------|
 | Primary row count | |
-| Can you query standby? | (may hang / fail — note what happens) |
+| Can you query standby? | (may hang / fail - note what happens) |
 
 ### 4. Heal the partition
 

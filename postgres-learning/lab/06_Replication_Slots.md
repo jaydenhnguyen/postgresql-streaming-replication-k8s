@@ -1,4 +1,4 @@
-# Lab 06 — Replication Slots Deep Dive
+# Lab 06 - Replication Slots Deep Dive
 
 **Goal:** Inspect slot metadata, watch `restart_lsn` move, and state the disk-full risk out loud.
 
@@ -95,7 +95,7 @@ SQL
 
 ## Takeaway
 
-> A slot is a **contract**: do not recycle WAL past this consumer's position. Powerful — and dangerous if the consumer never returns.
+> A slot is a **contract**: do not recycle WAL past this consumer's position. Powerful - and dangerous if the consumer never returns.
 
 
 

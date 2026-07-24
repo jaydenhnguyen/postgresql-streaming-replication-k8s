@@ -97,7 +97,7 @@ if [[ -f "${CREDS_FILE}" ]]; then
   set +a
   ok "loaded $(rel "${CREDS_FILE}")"
 else
-  warn "no $(rel "${CREDS_FILE}") — copy .env.example → .env or passwords will be random"
+  warn "no $(rel "${CREDS_FILE}") - copy .env.example → .env or passwords will be random"
 fi
 
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)}"
@@ -133,7 +133,7 @@ ok "all manifests prepared"
 
 step "Creating kind cluster"
 if kind get clusters 2>/dev/null | grep -qx "${CLUSTER_NAME}"; then
-  warn "cluster ${CLUSTER_NAME} already exists — skip create"
+  warn "cluster ${CLUSTER_NAME} already exists - skip create"
 else
   kind create cluster --name "${CLUSTER_NAME}" --config kind-config.yaml
   ok "cluster created"
@@ -194,14 +194,14 @@ kubectl get pods,pvc -n "${NS}" -o wide
 ok "standby is Ready"
 
 # Task 6 schema: events_<id>(id serial, tag text, created_at timestamptz default now())
-step "Seed (1/3) — create database clo835"
+step "Seed (1/3) - create database clo835"
 kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
   psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -c "CREATE DATABASE clo835;" 2>/dev/null \
   || info "database clo835 already exists"
 ok "database clo835 ready"
 
-step "Seed (2/3) — create table events_${STUDENT_ID}"
+step "Seed (2/3) - create table events_${STUDENT_ID}"
 kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
   psql -h localhost -U postgres -d clo835 -v ON_ERROR_STOP=1 \
   -c "CREATE TABLE IF NOT EXISTS events_${STUDENT_ID} (
@@ -212,7 +212,7 @@ kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
       );"
 ok "table events_${STUDENT_ID} ready"
 
-step "Seed (3/3) — insert ≥20 rows"
+step "Seed (3/3) - insert ≥20 rows"
 kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
   psql -h localhost -U postgres -d clo835 -v ON_ERROR_STOP=1 \
   -c "INSERT INTO events_${STUDENT_ID} (tag, payload)
@@ -231,7 +231,7 @@ kubectl exec -n "${NS}" "${PRIMARY_POD}" -- \
    FROM pg_stat_replication;"
 ok "primary replication check done"
 
-info "standby — recovery flag + row count"
+info "standby - recovery flag + row count"
 kubectl exec -n "${NS}" "${STANDBY_POD}" -- \
   psql -h localhost -U postgres -d clo835 -c \
   "SELECT pg_is_in_recovery() AS in_recovery;
@@ -264,11 +264,11 @@ kubectl exec -it -n ${NS} ${STANDBY_POD} -- psql -h localhost -U postgres -d clo
 # Once already inside bash on a pod:
 psql -h localhost -U postgres -d clo835
 
-# Task 7 — streaming check
+# Task 7 - streaming check
 kubectl exec -n ${NS} ${PRIMARY_POD} -- \\
   psql -h localhost -U postgres -c "SELECT state, sync_state, replay_lsn FROM pg_stat_replication;"
 
-# Task 11 — lag check (side by side)
+# Task 11 - lag check (side by side)
 echo "primary LSN:"; kubectl exec -n ${NS} ${PRIMARY_POD} -- \\
   psql -h localhost -U postgres -Atq -c "SELECT pg_current_wal_lsn();"
 echo "standby replay LSN:"; kubectl exec -n ${NS} ${STANDBY_POD} -- \\

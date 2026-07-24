@@ -1,15 +1,15 @@
-# PostgreSQL Streaming Replication — Lab Track
+# PostgreSQL Streaming Replication - Lab Track
 
 Hands-on labs to master every concept needed for this project (Docker first, then map the same ideas to Kubernetes).
 
 Work from `postgres-learning/`. Complete labs **in order**. Each lab has:
 
-- **Goal** — what you are proving
-- **Theory** — which note to read first
-- **Steps** — exact commands
-- **Observation log** — fill in what you saw
-- **Expected outcome** — pass criteria
-- **Takeaway** — one sentence you should be able to say out loud
+- **Goal** - what you are proving
+- **Theory** - which note to read first
+- **Steps** - exact commands
+- **Observation log** - fill in what you saw
+- **Expected outcome** - pass criteria
+- **Takeaway** - one sentence you should be able to say out loud
 
 ---
 
@@ -62,7 +62,7 @@ alias sx='docker exec -it standby-db  psql -U prPostgres -d testDB'
 ## How to use each lab
 
 1. Read the linked theory note(s) once.
-2. Run the steps; **fill the Observation log** (do not skip — this is what you will explain in the demo).
+2. Run the steps; **fill the Observation log** (do not skip - this is what you will explain in the demo).
 3. Check **Expected outcome**. If it fails, use Troubleshooting in that lab, then [12](./12_Failure_Diagnosis_Drill.md).
 4. Write the **Takeaway** in your own words before moving on.
 

@@ -1,4 +1,4 @@
-# Lab 11 — Promotion and Row Reconciliation
+# Lab 11 - Promotion and Row Reconciliation
 
 **Goal:** Promote the `standby` during a write load, measure what survived, and explain losses with LSNs. After 
 promoting, stop the old primary so only one node accepts writes (avoid two primaries / split-brain).
@@ -45,11 +45,11 @@ END $$;
 SQL
 ```
 
-(Shorter loop is fine if your machine is slow — note how many you aimed for.)
+(Shorter loop is fine if your machine is slow - note how many you aimed for.)
 
-### 3. Snapshot standby replay LSN (Terminal B) — then promote
+### 3. Snapshot standby replay LSN (Terminal B) - then promote
 
-While the loop runs (or immediately after pausing replay for a bigger gap — optional Lab 04 trick):
+While the loop runs (or immediately after pausing replay for a bigger gap - optional Lab 04 trick):
 
 ```bash
 docker exec -it standby-db \
@@ -93,12 +93,12 @@ SELECT max(id), count(*) FROM lab11_promo;
 SQL
 ```
 
-On the **old primary** (if you start it briefly **read-only for forensics only** — do not let apps write):
+On the **old primary** (if you start it briefly **read-only for forensics only** - do not let apps write):
 
 ```bash
-# optional forensics — prefer leaving it stopped
+# optional forensics - prefer leaving it stopped
 # docker compose start primary-db
-# then compare counts — then STOP again immediately
+# then compare counts - then STOP again immediately
 ```
 
 | Counter | Value |

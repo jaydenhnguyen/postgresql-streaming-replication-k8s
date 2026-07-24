@@ -447,7 +447,7 @@ Example:
 | 9  | [9_Promotion.md](./9_Promotion.md)                                           | Promote `standby` → `primary`, prevent data loss            |
 | 10 | [10_Replication_Failure_Scenarios.md](./10_Replication_Failure_Scenarios.md) | Partition, offline, WAL removed, rebuild                    |
 
-**Hands-on labs (do these):** [`../lab/README.md`](../lab/README.md) — Labs 00–12 with observation logs, outcomes, and project-demo mapping.
+**Hands-on labs (do these):** [`../lab/README.md`](../lab/README.md) - Labs 00–12 with observation logs, outcomes, and project-demo mapping.
 
 ---
 
@@ -458,5 +458,5 @@ Example:
 - WAL archiving and PITR
 - Hot Standby feedback, vacuum vs replication
 - Cascading replication
-- PostgreSQL on Kubernetes (StatefulSets, PVCs, Services) — project build
+- PostgreSQL on Kubernetes (StatefulSets, PVCs, Services) - project build
 - HA tools for comparison: Patroni, CloudNativePG

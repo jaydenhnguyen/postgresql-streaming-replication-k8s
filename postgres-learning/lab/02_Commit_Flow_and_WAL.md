@@ -1,4 +1,4 @@
-# Lab 02 — Commit Flow and WAL
+# Lab 02 - Commit Flow and WAL
 
 **Goal:** Watch WAL grow on commit and prove durability is WAL-first, not `base/`-first.
 
@@ -92,7 +92,7 @@ Answer without looking at notes:
 
 | Question | Your answer |
 |----------|-------------|
-| When does the client get `COMMIT` OK — after WAL fsync or after `base/` flush? | |
+| When does the client get `COMMIT` OK - after WAL fsync or after `base/` flush? | |
 | What is a dirty page? | |
 | What does a checkpoint do to dirty pages? | |
 

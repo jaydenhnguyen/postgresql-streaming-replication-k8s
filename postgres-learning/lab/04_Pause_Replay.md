@@ -1,4 +1,4 @@
-# Lab 04 — Pause Replay (Receive vs Replay)
+# Lab 04 - Pause Replay (Receive vs Replay)
 
 **Goal:** Force a visible gap between WAL **received** and WAL **replayed**, then resume and catch up.
 
@@ -124,7 +124,7 @@ Always leave replay **unpaused** before other labs.
 
 ## Takeaway
 
-> **Receive ≠ replay.** Promotion safety depends on **replay** position — that is the data the standby has actually applied.
+> **Receive ≠ replay.** Promotion safety depends on **replay** position - that is the data the standby has actually applied.
 
 
 

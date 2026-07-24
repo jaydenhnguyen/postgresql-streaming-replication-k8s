@@ -73,14 +73,14 @@ Under async replication, the `primary` keeps committing. WAL piles up. When the 
 3. Watch lag shrink with `pg_wal_lsn_diff`
 4. If reconnect fails with "requested WAL segment has already been removed" → rebuild (section 6)
 
-👉 Network partition itself does not destroy data — **what the `primary` does with WAL while the `standby` is cut off** 
+👉 Network partition itself does not destroy data - **what the `primary` does with WAL while the `standby` is cut off** 
 does.
 
 ---
 
 ## 2. `standby` Offline
 
-The `standby` process or pod is stopped, crashed, or deleted — but the `primary` is fine.
+The `standby` process or pod is stopped, crashed, or deleted - but the `primary` is fine.
 
 ```
 Primary                          Standby
@@ -159,7 +159,7 @@ ERROR:  replication slot ... is invalid because the required WAL was deleted
 | No replication slot          | Checkpoint recycled WAL past what the `standby` needed |
 | `wal_keep_size` too small    | Soft retention ran out (see section 5)                 |
 | `max_slot_wal_keep_size` hit | Slot invalidated to protect `primary` disk             |
-| `standby` offline too long   | Same as above — retention exhausted                    |
+| `standby` offline too long   | Same as above - retention exhausted                    |
 
 ### Recovery
 
@@ -192,7 +192,7 @@ SELECT * FROM pg_stat_replication;
 -- but nothing protects WAL if the standby disconnects
 ```
 
-Healthy streaming **without** a slot looks fine — until the `standby` falls behind or disconnects. Then the `primary` is 
+Healthy streaming **without** a slot looks fine - until the `standby` falls behind or disconnects. Then the `primary` is 
 free to recycle WAL after checkpoints.
 
 ### Why "it worked until it didn't"
@@ -219,7 +219,7 @@ With burst writes, network blip, or standby restart:
 3. Reload/restart the `standby` so WAL Receiver uses the slot
 4. If WAL was already removed → rebuild first, then attach the slot so it does not happen again
 
-👉 **A missing slot is a latent failure** — streaming works until the first serious lag or disconnect.
+👉 **A missing slot is a latent failure** - streaming works until the first serious lag or disconnect.
 
 ---
 
@@ -289,8 +289,8 @@ When the `standby` cannot catch up (WAL gap, invalidated slot, corrupt `PGDATA`)
 | `requested WAL segment ... has already been removed` | **Yes**     |
 | Slot `wal_status = lost` / invalidated               | **Yes**     |
 | `standby` data directory corrupted / PVC lost        | **Yes**     |
-| Brief network blip, slot intact, lag catching up     | No — wait   |
-| `standby` restarted, PVC intact, reconnects          | No — resume |
+| Brief network blip, slot intact, lag catching up     | No - wait   |
+| `standby` restarted, PVC intact, reconnects          | No - resume |
 
 ### Rebuild steps
 
@@ -334,7 +334,7 @@ if pgdata empty:     pg_basebackup ...   # first boot OR after intentional wipe
 else:                skip                # normal pod restart
 ```
 
-A rebuild means **intentionally emptying** the PVC data so the initContainer runs `pg_basebackup` again — do not 
+A rebuild means **intentionally emptying** the PVC data so the initContainer runs `pg_basebackup` again - do not 
 confuse that with a normal restart.
 
 👉 **Rebuild = delete `standby` PGDATA + `pg_basebackup` again + (re)attach a slot.** Same tool as first seeding 
@@ -382,18 +382,18 @@ Standby not streaming?
 
 ## Summary
 
-👉 **Network partition** — connection drops; `primary` keeps writing; catch-up depends on whether WAL was retained.
+👉 **Network partition** - connection drops; `primary` keeps writing; catch-up depends on whether WAL was retained.
 
-👉 **`standby` offline** — same retention question; with a slot the `primary` waits (and may fill disk); without a slot, 
+👉 **`standby` offline** - same retention question; with a slot the `primary` waits (and may fill disk); without a slot, 
 long downtime often means rebuild.
 
-👉 **WAL removed** — hard failure; only recovery is `pg_basebackup`.
+👉 **WAL removed** - hard failure; only recovery is `pg_basebackup`.
 
-👉 **Missing replication slot** — latent risk; fine until lag/disconnect, then recycling breaks the `standby`.
+👉 **Missing replication slot** - latent risk; fine until lag/disconnect, then recycling breaks the `standby`.
 
-👉 **`wal_keep_size` too small** — soft cushion fails under load/outage; prefer slots as the real contract.
+👉 **`wal_keep_size` too small** - soft cushion fails under load/outage; prefer slots as the real contract.
 
-👉 **Rebuild** — wipe `standby` `PGDATA`, run `pg_basebackup -R -X stream`, attach a slot, verify `streaming`.
+👉 **Rebuild** - wipe `standby` `PGDATA`, run `pg_basebackup -R -X stream`, attach a slot, verify `streaming`.
 
 ---
 

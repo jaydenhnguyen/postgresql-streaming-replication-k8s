@@ -1,6 +1,6 @@
-# Lab 12 — Failure Diagnosis Drill (Capstone)
+# Lab 12 - Failure Diagnosis Drill (Capstone)
 
-**Goal:** Diagnose common failures using only symptoms + a short checklist — no peeking at note 10 until you commit an answer.
+**Goal:** Diagnose common failures using only symptoms + a short checklist - no peeking at note 10 until you commit an answer.
 
 **Theory (check after):** [10_Replication_Failure_Scenarios.md](../notes/10_Replication_Failure_Scenarios.md)
 
@@ -14,7 +14,7 @@ For each scenario:
 
 1. Read **Symptom**.
 2. Write **Likely cause** and **First three commands**.
-3. Then reveal by checking the Answer key at the bottom (fold mentally — don't scroll early).
+3. Then reveal by checking the Answer key at the bottom (fold mentally - don't scroll early).
 
 ---
 
@@ -147,7 +147,7 @@ Tick when you can explain without notes:
 
 ## Takeaway
 
-> Healthy streaming is not "containers up" — it is **streaming state + LSN progress + correct roles + retained WAL**. Diagnosis starts with logs, `pg_stat_replication`, slots, and `pg_is_in_recovery()`.
+> Healthy streaming is not "containers up" - it is **streaming state + LSN progress + correct roles + retained WAL**. Diagnosis starts with logs, `pg_stat_replication`, slots, and `pg_is_in_recovery()`.
 
 ---
 

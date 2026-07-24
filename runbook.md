@@ -319,115 +319,331 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
 
 ---
 
-## 5. Generate a writing load on the primary
+## 5. Promote, repoint, fence, and reconcile
 
-Used during the lag demo (section 4, Step 7). Run in its own terminal:
+Promote ends recovery on the standby (Postgres becomes writable).
 
-```bash
-while true; do
-  kubectl exec -n ${NS} ${PRIMARY} -- \
-    psql -h localhost -U postgres -d clo835 -c \
-    "INSERT INTO events_${ENV_ID} (tag)
-     VALUES ('load-${ENV_ID}-' || clock_timestamp());"
-  sleep 0.2
-done
-```
+Kubernetes labels do **not** change - the pod still has `role: standby`.
 
-Stop with `Ctrl-C`. For a visible LSN gap on kind, pause replay first (section 4, Steps 5 - 6), then start this loop.
+Repoint `pg-write` so clients follow the new writer, then scale the old primary to `0` so only one node accepts writes
+(avoid two primaries / split-brain).
+
+Finally, count exact `sent` / `made_it` / `lost`.
+
+In this section you **pause replay**, insert tagged `pre-promo-*` rows, then promote. Promote ends the pause and
+**replays already-received WAL before** the node becomes read-write - so those rows appear on the new primary even
+though they were invisible on the standby while paused.
+
+| Value     | Meaning                                                                                                                  |
+|-----------|--------------------------------------------------------------------------------------------------------------------------|
+| `sent`    | Rows you inserted on the old primary before promote (`pre-promo-1` … `pre-promo-30`)                                     |
+| `made_it` | How many of those rows exist on the promoted node                                                                        |
+| `lost`    | `sent - made_it` - commits the standby had **not received** yet when promote ran (still in flight / only on old primary) |
 
 ---
 
-## 6. Promote the standby
+### Step 1 - Confirm streaming (Terminal A)
 
-### Method A - `pg_ctl promote`
-
-```shell
-kubectl exec -n ${NS} ${STANDBY} -- \
-  pg_ctl promote -D ${PGDATA}
+```bash
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -c \
+  "SELECT state, sync_state, replay_lsn FROM pg_stat_replication;"
 ```
 
-Confirm:
+**Expected output:**
+```text
+   state   | sync_state | replay_lsn
+-----------+------------+------------
+ streaming | async      | 0/........
+(1 row)
+```
 
-```shell
+---
+
+### Step 2 - Snapshot row counts on both pods (Terminal A)
+
+```bash
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*) AS n, max(id) AS max_id FROM events_${ENV_ID};"
+
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*) AS n, max(id) AS max_id FROM events_${ENV_ID};"
+```
+
+**Expected output:** Same `n` and `max_id` on both (or standby a tiny bit behind if something just wrote).
+
+---
+
+### Step 3 - Snapshot LSN / lag_bytes (Terminal A)
+
+```bash
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -c \
+  "SELECT pg_current_wal_lsn() AS primary_lsn,
+          replay_lsn AS standby_replay_lsn,
+          pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS lag_bytes
+   FROM pg_stat_replication;"
+```
+
+**Expected output:** One row. `lag_bytes` is often `0` or small when idle.
+
+---
+
+### Step 4 - Pause replay, then write countable rows on the primary
+
+Pause freezes **apply** on the standby. WAL can still be **received**, but those commits do not show up in
+`SELECT` until replay runs (or until promoting, which ends the pause and applies received WAL first).
+
+```bash
 kubectl exec -n ${NS} ${STANDBY} -- \
   psql -h localhost -U postgres -c \
-  "SELECT pg_is_in_recovery();"
+  "SELECT pg_wal_replay_pause();"
 ```
 
-Must return `f`.
+Confirm replay is paused:
 
-### Method B - `pg_promote()` / trigger-file alternative
+```bash
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -c \
+  "SELECT pg_is_wal_replay_paused();"
+```
 
-```shell
+**Expected output:**
+```text
+ pg_is_wal_replay_paused
+-------------------------
+ t
+```
+
+Then open a **second** terminal, run the same exports, and insert tagged rows on the primary (`pre-promo-*` =
+rows written before promote):
+
+```bash
+for i in $(seq 1 30); do
+  kubectl exec -n ${NS} ${PRIMARY} -- \
+    psql -h localhost -U postgres -d clo835 -c \
+    "INSERT INTO events_${ENV_ID} (tag) VALUES ('pre-promo-${i}');" >/dev/null
+  echo "sent pre-promo-${i}"
+  sleep 0.1
+done
+echo "SENT=30"
+```
+
+**Expected output:** Lines `sent pre-promo-1` … `sent pre-promo-30`, then `SENT=30`.
+
+Do **not** call `pg_wal_replay_resume()` - continue to Step 5 and promote. Promote will apply the received WAL.
+
+---
+
+### Step 5 - Re-snapshot right before promoting (Terminal A)
+
+While replay is still paused, the standby table should be missing the `pre-promo-*` rows (they are in received WAL,
+not applied yet).
+
+```bash
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*) AS primary_n,
+          count(*) FILTER (WHERE tag LIKE 'pre-promo-%') AS primary_pre_promo_count
+   FROM events_${ENV_ID};"
+
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*) AS standby_n,
+          count(*) FILTER (WHERE tag LIKE 'pre-promo-%') AS standby_pre_promo_count,
+          pg_last_wal_replay_lsn() AS replay_lsn,
+          pg_last_wal_receive_lsn() AS receive_lsn
+   FROM events_${ENV_ID};"
+```
+
+**Expected output:**
+- `primary_pre_promo_count` = `30`
+- `standby_pre_promo_count` = `0` (or far behind) while paused
+- `receive_lsn` ahead of `replay_lsn` (WAL received, not yet applied)
+
+---
+
+### Step 6 - Promote the standby (Terminal A)
+
+Method A (`pg_ctl promote`):
+
+```bash
+kubectl exec -n ${NS} ${STANDBY} -- gosu postgres pg_ctl promote -D ${PGDATA}
+```
+
+**Expected output:**
+```text
+waiting for server to promote.... done
+server promoted
+```
+
+Method B (alternative - try once on a rebuild):
+
+```bash
 kubectl exec -n ${NS} ${STANDBY} -- \
   psql -h localhost -U postgres -c \
   "SELECT pg_promote();"
 ```
 
-Confirm again with `SELECT pg_is_in_recovery();` - expect `f`.
+**Expected output:** `t` (promote requested). Pod name and K8s labels stay `role: standby`.
 
-`pg_ctl promote` and `pg_promote()` both end recovery. The trigger-file path is the same mechanism PostgreSQL uses internally.
+Promote ends the replay pause and applies already-received WAL **before** the node becomes read-write.
 
 ---
 
-## 7. Repoint clients (`pg-write`)
+### Step 7 - Confirm not in recovery (Terminal A)
 
-Before (selector points at primary):
+```bash
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -c \
+  "SELECT pg_is_in_recovery();"
+```
 
-```shell
+**Expected output:**
+```text
+ pg_is_in_recovery
+-------------------
+ f
+```
+
+---
+
+### Step 8 - Confirm paused WAL was applied on the new primary (Terminal A)
+
+The `pre-promo-*` rows that were invisible on the standby in Step 5 should now all be present on the promoted node.
+
+```bash
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*) FILTER (WHERE tag LIKE 'pre-promo-%') AS standby_pre_promo_count
+   FROM events_${ENV_ID};"
+
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT id, tag FROM events_${ENV_ID}
+   WHERE tag LIKE 'pre-promo-%'
+   ORDER BY id;"
+```
+
+**Expected output:**
+- `standby_pre_promo_count` = `30` (same as `SENT`)
+- All tags `pre-promo-1` … `pre-promo-30` listed
+
+That is the pause story: received-but-unreplayed WAL is replayed as part of promoting, so the new primary has that data.
+
+---
+
+### Step 9 - Prove writes on the promoted pod (Terminal A)
+
+```bash
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "INSERT INTO events_${ENV_ID} (tag) VALUES ('${ENV_ID}-post-promo');
+   SELECT id, tag FROM events_${ENV_ID} ORDER BY id DESC LIMIT 3;"
+```
+
+**Expected output:** INSERT succeeds. The latest tag is `${ENV_ID}-post-promo`.
+
+The old primary is still writable until you fence it
+
+---
+
+### Step 10 - Check `pg-write` selector before repoint (Terminal A)
+
+```bash
 kubectl get svc pg-write -n ${NS} -o jsonpath='{.spec.selector}{"\n"}'
 ```
 
-Patch to the promoted standby labels:
+**Expected output:** selector still has `"role":"primary"` (points at the old writer).
 
-```shell
+---
+
+### Step 11 - Repoint `pg-write` to the promoted pod (Terminal A)
+
+Same DNS name; new backend labels (`role: standby`).
+
+```bash
 kubectl patch svc pg-write -n ${NS} --type=merge -p \
   "{\"spec\":{\"selector\":{\"app\":\"postgres\",\"role\":\"standby\",\"student-id\":\"${ENV_ID}\"}}}"
 ```
 
-Prove writes land on the new primary:
+**Expected output:** `service/pg-write patched`
 
-```shell
-kubectl run -n ${NS} psql-write-test --rm -it --restart=Never \
+Confirm:
+
+```bash
+kubectl get svc pg-write -n ${NS} -o jsonpath='{.spec.selector}{"\n"}'
+```
+
+**Expected output:** `"role":"standby"` with the same `student-id`.
+
+---
+
+### Step 12 - Write through `pg-write` (Terminal A)
+
+```bash
+kubectl run -n ${NS} psql-write-test --rm --restart=Never \
   --image=postgres:18 -- \
   psql -h pg-write -U postgres -d clo835 -c \
   "INSERT INTO events_${ENV_ID} (tag) VALUES ('via-pg-write');
    SELECT id, tag FROM events_${ENV_ID} ORDER BY id DESC LIMIT 3;"
 ```
 
-Fence the old primary to avoid split-brain:
+**Expected output:** INSERT succeeds; latest rows include `via-pg-write` (and `${ENV_ID}-post-promo`).
 
-```shell
+If `psql` asks for a password, use `POSTGRES_PASSWORD` from `src/.env`.
+
+---
+
+### Step 13 - Fence the old primary (Terminal A)
+
+Stops the old primary from accepting writes (avoids two primaries / split-brain).
+
+```bash
 kubectl scale statefulset pg-primary-${ENV_ID} -n ${NS} --replicas=0
 ```
 
+**Expected output:** `statefulset.apps/pg-primary-${ENV_ID} scaled`
+
+```bash
+kubectl get pods -n ${NS} -o wide
+```
+
+**Expected output:** Only the promoted standby pod is `Running`. Old primary is gone or `Terminating`.
+
 ---
 
-## 8. Count and reconcile rows after promotion
+### Step 14 - Reconcile rows (Terminal A)
 
-On the promoted node (former standby):
+On the promoted node (same check as Step 8, kept here for the demo narrative):
 
-```shell
+```bash
 kubectl exec -n ${NS} ${STANDBY} -- \
   psql -h localhost -U postgres -d clo835 -c \
-  "SELECT count(*), max(id) FROM events_${ENV_ID};"
+  "SELECT count(*) AS total,
+          count(*) FILTER (WHERE tag LIKE 'pre-promo-%') AS standby_pre_promo_count
+   FROM events_${ENV_ID};"
 ```
 
-On the old primary (if it still exists):
+**Expected output (pause + promote path above):** `standby_pre_promo_count` = `30`.
 
-```shell
-kubectl exec -n ${NS} ${PRIMARY} -- \
-  psql -h localhost -U postgres -d clo835 -c \
-  "SELECT count(*), max(id) FROM events_${ENV_ID};"
-```
+Then calculate:
 
-With async replication, commits on the old primary whose WAL position was **after** the standby `replay_lsn` at promote
-time do not appear on the new timeline. Compare counts (or your write-loop total vs. promoted `count(*)`) and note 
-exactly how many rows made it and how many did not, using the LSN / `lag_bytes` from section 4.
+- `sent` = `30` (from Step 4)
+- `made_it` = `standby_pre_promo_count`
+- `lost` = `sent - made_it` → usually `0` here, because promote applied the received WAL
+
+`lost > 0` only for commits that were still **only on the old primary** (not yet received by the standby) when
+promote ran - e.g. an instructor write loop still inserting at the promoted moment. That is different from
+"paused but already received" WAL, which promote does apply.
 
 ---
 
-## 9. Tear down and rebuild
+## 6. Tear down and rebuild
+
+Needed after section 5 before another full failover practice.
 
 ```shell
 cd src

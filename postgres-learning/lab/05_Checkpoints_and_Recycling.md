@@ -1,4 +1,4 @@
-# Lab 05 — Checkpoints and WAL Recycling
+# Lab 05 - Checkpoints and WAL Recycling
 
 **Goal:** See what triggers a checkpoint, distinguish `checkpoint_timeout` vs `max_wal_size`, and contrast that with `wal_keep_size`.
 
@@ -88,7 +88,7 @@ SQL
 | Observation | Note |
 |-------------|------|
 | Segment names / count change? | |
-| Recycle = delete forever? (yes/no) | (expect **no** — rename/reuse) |
+| Recycle = delete forever? (yes/no) | (expect **no** - rename/reuse) |
 
 ### 5. Three retention decisions (from notes)
 

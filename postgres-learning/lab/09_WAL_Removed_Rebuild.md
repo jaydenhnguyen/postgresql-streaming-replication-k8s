@@ -1,4 +1,4 @@
-# Lab 09 — WAL Removed → Rebuild with `pg_basebackup`
+# Lab 09 - WAL Removed → Rebuild with `pg_basebackup`
 
 **Goal:** Practice the universal fix when the `standby` can no longer catch up: wipe + re-seed + restart.
 
@@ -103,7 +103,7 @@ docker exec -it standby-db \
 
 | Situation | Action |
 |-----------|--------|
-| Lag high but streaming | Wait / investigate load — **no** rebuild |
+| Lag high but streaming | Wait / investigate load - **no** rebuild |
 | WAL removed / slot lost | **Rebuild** (this lab) |
 | Wrong `primary_conninfo` | Fix config / re-seed with `-R` |
 | Accidental second primary (no `standby.signal`) | Re-seed with `-R` |
@@ -120,7 +120,7 @@ docker exec -it standby-db \
 
 ## Takeaway
 
-> Once needed WAL is gone, no restart closes the gap — only a new base backup can.
+> Once needed WAL is gone, no restart closes the gap - only a new base backup can.
 
 
 

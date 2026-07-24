@@ -207,8 +207,8 @@ Time ─────────────────────────
 
 A checkpoint occurs whenever **either** of these happens first:
 
-1. **`checkpoint_timeout` expires** — time-based trigger
-2. **`max_wal_size` is reached** — WAL-volume trigger
+1. **`checkpoint_timeout` expires** - time-based trigger
+2. **`max_wal_size` is reached** - WAL-volume trigger
 
 Plus a few other triggers:
 
