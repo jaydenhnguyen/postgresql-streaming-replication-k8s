@@ -1,6 +1,7 @@
 # Lab 11 — Promotion and Row Reconciliation
 
-**Goal:** Promote the `standby` during a write load, measure what survived, and explain losses with LSNs. Practice fencing awareness (split-brain).
+**Goal:** Promote the `standby` during a write load, measure what survived, and explain losses with LSNs. After 
+promoting, stop the old primary so only one node accepts writes (avoid two primaries / split-brain).
 
 **Theory:** [9_Promotion.md](../notes/9_Promotion.md), [4_LSN.md](../notes/4_LSN.md)
 

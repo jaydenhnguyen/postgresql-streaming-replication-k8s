@@ -20,10 +20,10 @@ docker exec -it primary-db \
       FROM pg_stat_replication;"
 ```
 
-| Baseline | Value |
-|----------|-------|
-| state | `streaming` |
-| lag_bytes | |
+| Baseline  | Value       |
+|-----------|-------------|
+| state     | `streaming` |
+| lag_bytes |             |
 
 ### 2. Partition: disconnect standby from the Docker network
 

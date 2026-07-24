@@ -29,9 +29,9 @@ docker exec -it primary-db \
   -c "SELECT slot_name, active, wal_status, restart_lsn FROM pg_replication_slots;"
 ```
 
-| Observation | Value |
-|-------------|-------|
-| Error / wal_status | |
+| Observation        | Value |
+|--------------------|-------|
+| Error / wal_status |       |
 
 ### 2. Stop standby and wipe its data
 
