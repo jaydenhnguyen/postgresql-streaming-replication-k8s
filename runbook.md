@@ -4,15 +4,17 @@ Operational guide for this project's local PostgreSQL primary + hot standby on [
 
 ## Goal
 
-Bring up a two-node streaming replication cluster from scratch, prove it is healthy, measure lag under write load, practice failover (promote + client cutover), and tear it down cleanly so you can rebuild anytime.
+Bring up a two-node streaming replication cluster from scratch, prove seed data on both roles, confirm the standby is 
+read-only, measure lag under a writing load, practice failover (promote + client cutover), and tear it down cleanly so 
+you can rebuild anytime.
 
 ## What you practice if you follow start to finish
 
 - Bootstrapping stateful Postgres on Kubernetes (StatefulSets, headless Services, Secrets, PVCs)
 - How physical streaming replication looks in practice (`pg_stat_replication`, LSNs, byte lag)
 - Why a hot standby is read-only until promotion
-- Failover: `pg_ctl promote` / `pg_promote()`, then repointing a write Service
-- Accounting for rows that async replication can lose across a promote window
+- Failover: `pg_ctl promote` / `pg_promote()`, then repointing a writing Service
+- Accounting for rows that async replication can lose across a promoted window
 - Idempotent destroy + rebuild of a local kind environment
 
 Copy-paste the commands below. Work from the `src/` directory.
@@ -27,7 +29,8 @@ export STANDBY=pg-standby-${ENV_ID}-0
 export PGDATA=/var/lib/postgresql/18/docker
 ```
 
-`ENV_ID` is the same id you pass to `./bootstrap.sh`. Change `hdhnguyen` if you use another id, or skip the exports and type full names.
+`ENV_ID` is the same id you pass to `./bootstrap.sh`. Change `hdhnguyen` if you use another id, or skip the exports and 
+type full names.
 
 ---
 
@@ -44,9 +47,63 @@ Healthy afterward:
 ```shell
 kubectl get pods,pvc -n ${NS} -o wide
 ```
+
 ---
 
-## 2. Check replication lag
+## 2. Verify seed data on primary and standby
+
+Bootstrap already creates database `clo835`, table `events_${ENV_ID}`, and seed rows. Confirm on the primary:
+
+```shell
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT * FROM events_${ENV_ID} LIMIT 5;"
+```
+
+The same query on the standby - rows should match:
+
+```shell
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT * FROM events_${ENV_ID} LIMIT 5;"
+```
+
+INSERT on the primary, then re-check the standby:
+
+```shell
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "INSERT INTO events_${ENV_ID} (tag) VALUES ('demo-${ENV_ID}');
+   SELECT id, tag FROM events_${ENV_ID} ORDER BY id DESC LIMIT 3;"
+
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT id, tag FROM events_${ENV_ID} ORDER BY id DESC LIMIT 3;"
+```
+
+---
+
+## 3. Verify the standby is read-only
+
+```shell
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "INSERT INTO events_${ENV_ID} (tag) VALUES ('should-fail');"
+```
+
+Expect: `ERROR: cannot execute INSERT in a read-only transaction`
+
+```shell
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -c \
+  "SELECT pg_is_in_recovery();"
+```
+
+Expect: `t`
+
+---
+
+## 4. Check replication lag
 
 On a quiet kind cluster, catch-up is often too fast to see. Pause WAL **replay** on the standby, write on the primary, 
 then resume - so `lag_bytes` grows, and we can show real LSN numbers.
@@ -61,7 +118,7 @@ Use **two terminals**. Both need the exports from the top of this file.
 
 ---
 
-### Step 2.1 - Confirm streaming (Terminal A)
+### Step 1 - Confirm streaming (Terminal A)
 
 ```bash
 kubectl exec -n ${NS} ${PRIMARY} -- \
@@ -79,7 +136,7 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
 
 ---
 
-### Step 2.2 - get the latest WAL on primary (Terminal A)
+### Step 2 - get the latest WAL on primary (Terminal A)
 
 ```bash
 kubectl exec -n ${NS} ${PRIMARY} -- \
@@ -91,7 +148,7 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
 
 ---
 
-### Step 2.3 - get the latest replayed WAL on Standby (Terminal A)
+### Step 3 - get the latest replayed WAL on Standby (Terminal A)
 
 Reads how far the standby has applied WAL. Same idea as `replay_lsn` in `pg_stat_replication` on the primary
 
@@ -101,11 +158,11 @@ kubectl exec -n ${NS} ${STANDBY} -- \
   "SELECT pg_last_wal_replay_lsn() AS replay_lsn;"
 ```
 
-**Expected output:** An LSN close to Step 2.2
+**Expected output:** An LSN close to Step 2
 
 ---
 
-### Step 2.4 - get the Lag in bytes (Terminal A)
+### Step 4 - get the Lag in bytes (Terminal A)
 
 Computes the byte gap between primary tip and standby replay.
 
@@ -129,7 +186,7 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
 
 ---
 
-### Step 2.5 - Pause WAL replay on the standby (Terminal A)
+### Step 5 - Pause WAL replay on the standby (Terminal A)
 
 Freezes apply on the standby. WAL can still be **received**; it will not be **replayed** until you resume. 
 This makes the lag easy to demonstrate.
@@ -155,7 +212,7 @@ kubectl exec -n ${NS} ${STANDBY} -- \
 
 ---
 
-### Step 2.6 - Start the write (Terminal B)
+### Step 6 - Start the writing (Terminal B)
 Generates WAL on the primary while replay on Standby is paused.
 
 Open a **second** terminal, run the same exports, then:
@@ -173,7 +230,7 @@ done
 
 ---
 
-### Step 2.7 - Primary LSN (Terminal A)
+### Step 7 - Primary LSN (Terminal A)
 
 ```bash
 kubectl exec -n ${NS} ${PRIMARY} -- \
@@ -185,9 +242,9 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
 
 ---
 
-### Step 2.8 - Received vs. Replayed on the Standby (Terminal A)
+### Step 8 - Received vs. Replayed on the Standby (Terminal A)
 
-The Standby keeps receiving the WAL from the Primary but not replay those WAL
+The Standby keeps receiving the WAL from the Primary but not replaying those WAL
 
 ```bash
 kubectl exec -n ${NS} ${STANDBY} -- \
@@ -205,7 +262,7 @@ But the `replay_lsn` is behind the `pg_last_wal_receive_lsn()`
 
 ---
 
-### Step 2.9 - lag_bytes from the Primary (Terminal A)
+### Step 9 - lag_bytes from the Primary (Terminal A)
 
 Shows the byte lag from the Primary tip to Standby replay.
 
@@ -223,7 +280,7 @@ be `streaming`.
 
 ---
 
-### Step 2.10 - Resume WAL replay (Terminal A)
+### Step 10 - Resume WAL replay (Terminal A)
 ```bash
 kubectl exec -n ${NS} ${STANDBY} -- \
   psql -h localhost -U postgres -c \
@@ -243,7 +300,7 @@ kubectl exec -n ${NS} ${STANDBY} -- \
  f
 ```
 
-### Step 2.11 - lag_bytes after catch-up (Terminal A)
+### Step 11 - lag_bytes after catch-up (Terminal A)
 
 The gap closed after the resume.
 
@@ -262,9 +319,9 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
 
 ---
 
-## 3. Generate write load on the primary
+## 5. Generate a writing load on the primary
 
-Used during the lag demo (section 2, Step 2.7). Run in its own terminal:
+Used during the lag demo (section 4, Step 7). Run in its own terminal:
 
 ```bash
 while true; do
@@ -276,31 +333,11 @@ while true; do
 done
 ```
 
-Stop with `Ctrl-C`. For a visible LSN gap on kind, pause replay first (section 2, Steps 2.5-2.6), then start this loop.
+Stop with `Ctrl-C`. For a visible LSN gap on kind, pause replay first (section 4, Steps 5 - 6), then start this loop.
 
 ---
 
-## 4. Verify the standby is read-only
-
-```shell
-kubectl exec -n ${NS} ${STANDBY} -- \
-  psql -h localhost -U postgres -d clo835 -c \
-  "INSERT INTO events_${ENV_ID} (tag) VALUES ('should-fail');"
-```
-
-Expect: `ERROR: cannot execute INSERT in a read-only transaction`
-
-```shell
-kubectl exec -n ${NS} ${STANDBY} -- \
-  psql -h localhost -U postgres -c \
-  "SELECT pg_is_in_recovery();"
-```
-
-Expect: `t`
-
----
-
-## 5. Promote the standby
+## 6. Promote the standby
 
 ### Method A - `pg_ctl promote`
 
@@ -333,7 +370,7 @@ Confirm again with `SELECT pg_is_in_recovery();` - expect `f`.
 
 ---
 
-## 6. Repoint clients (`pg-write`)
+## 7. Repoint clients (`pg-write`)
 
 Before (selector points at primary):
 
@@ -366,7 +403,7 @@ kubectl scale statefulset pg-primary-${ENV_ID} -n ${NS} --replicas=0
 
 ---
 
-## 7. Count and reconcile rows after promotion
+## 8. Count and reconcile rows after promotion
 
 On the promoted node (former standby):
 
@@ -384,11 +421,13 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
   "SELECT count(*), max(id) FROM events_${ENV_ID};"
 ```
 
-With async replication, commits on the old primary whose WAL position was **after** the standby `replay_lsn` at promote time do not appear on the new timeline. Compare counts (or your write-loop total vs promoted `count(*)`) and note exactly how many rows made it and how many did not, using the LSN / `lag_bytes` from section 2.
+With async replication, commits on the old primary whose WAL position was **after** the standby `replay_lsn` at promote
+time do not appear on the new timeline. Compare counts (or your write-loop total vs. promoted `count(*)`) and note 
+exactly how many rows made it and how many did not, using the LSN / `lag_bytes` from section 4.
 
 ---
 
-## 8. Tear down and rebuild
+## 9. Tear down and rebuild
 
 ```shell
 cd src
@@ -402,4 +441,4 @@ Equivalent cluster delete:
 kind delete cluster --name pg-replication
 ```
 
-Then re-run bootstrap and confirm health with section 1.
+Then re-run the bootstrap and confirm health with section 1.
