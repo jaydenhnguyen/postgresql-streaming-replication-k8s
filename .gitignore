@@ -12,6 +12,7 @@
 # Course / local study artifacts
 /postgres-learning/data/
 /problem.pdf
+/practice-sessions.md
 
 # SSH private keys (never commit)
 *.pem

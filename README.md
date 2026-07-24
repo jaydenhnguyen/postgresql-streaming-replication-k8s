@@ -21,7 +21,7 @@ Practice bringing up asymmetric Postgres roles on Kubernetes from a clean host, 
 - Failover with `pg_ctl promote` / `pg_promote()`, then patching a write Service
 - Tear-down and rebuild of a local kind environment
 
-Day-2 commands live in [runbook.md](./runbook.md).
+Day-2 commands live in [runbook.md](solution/runbook.md).
 
 ---
 
@@ -100,7 +100,7 @@ Tear down:
 ./scripts/destroy.sh ${ENV_ID}
 ```
 
-Full ops path (lag, load, promote, cutover, rebuild): [runbook.md](./runbook.md).
+Full ops path (lag, load, promote, cutover, rebuild): [runbook.md](solution/runbook.md).
 
 ---
 
