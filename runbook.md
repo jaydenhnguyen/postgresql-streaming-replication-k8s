@@ -15,7 +15,7 @@ Bring up a two-node streaming replication cluster from scratch, prove it is heal
 - Accounting for rows that async replication can lose across a promote window
 - Idempotent destroy + rebuild of a local kind environment
 
-Copy-paste the commands below. Work from the `solution/` directory.
+Copy-paste the commands below. Work from the `src/` directory.
 
 Optional shell shortcuts (typing only - not part of the cluster):
 
@@ -34,8 +34,8 @@ export PGDATA=/var/lib/postgresql/18/docker
 ## 1. Bootstrap from nothing
 
 ```shell
-cd solution
-cp scripts/.env.example scripts/.env
+cd src
+cp .env.example .env
 ./bootstrap.sh ${ENV_ID}
 ```
 
@@ -391,7 +391,7 @@ With async replication, commits on the old primary whose WAL position was **afte
 ## 8. Tear down and rebuild
 
 ```shell
-cd solution
+cd src
 ./destroy.sh ${ENV_ID}
 ./bootstrap.sh ${ENV_ID}
 ```

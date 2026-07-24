@@ -21,7 +21,7 @@ Practice bringing up asymmetric Postgres roles on Kubernetes from a clean host, 
 - Failover with `pg_ctl promote` / `pg_promote()`, then patching a write Service
 - Tear-down and rebuild of a local kind environment
 
-Day-2 commands live in [runbook.md](solution/runbook.md).
+Day-2 commands live in [runbook.md](runbook.md).
 
 ---
 
@@ -81,9 +81,9 @@ export STANDBY=pg-standby-${ENV_ID}-0
 ```
 
 ```bash
-cd solution
-cp scripts/.env.example scripts/.env   # optional; edit passwords or skip for random
-./scripts/bootstrap.sh ${ENV_ID}
+cd src
+cp .env.example .env   # optional; edit passwords or skip for random
+./bootstrap.sh ${ENV_ID}
 
 kubectl get pods,pvc -n ${NS} -o wide
 
@@ -97,10 +97,10 @@ Expect both pods `Running` on different nodes and one `streaming` row in `pg_sta
 Tear down:
 
 ```bash
-./scripts/destroy.sh ${ENV_ID}
+./destroy.sh ${ENV_ID}
 ```
 
-Full ops path (lag, load, promote, cutover, rebuild): [runbook.md](solution/runbook.md).
+Full ops path (lag, load, promote, cutover, rebuild): [runbook.md](runbook.md).
 
 ---
 
@@ -111,12 +111,11 @@ Full ops path (lag, load, promote, cutover, rebuild): [runbook.md](solution/runb
 ├── README.md
 ├── runbook.md              # copy-paste day-2 procedures
 ├── assets/                 # architecture diagram (optional)
-└── solution/
+└── src/
     ├── kind-config.yaml    # 1 control-plane + 2 labeled workers
-    ├── scripts/
-    │   ├── bootstrap.sh    # kind + apply + seed + verify
-    │   ├── destroy.sh
-    │   └── .env.example    # copy to .env (gitignored)
+    ├── bootstrap.sh        # kind + apply + seed + verify
+    ├── destroy.sh
+    ├── .env.example        # copy to .env (gitignored)
     ├── manifests/
     │   ├── namespace.yaml
     │   ├── config/         # Secret template, postgres config, basebackup script
@@ -148,7 +147,7 @@ Namespace, object names, and seed table/rows are derived from the `ENV_ID` passe
 
 **Async by default.** Lag and row reconciliation make the trade-off visible instead of hiding it behind sync commits.
 
-**Secrets out of git.** Passwords come from `scripts/.env` or are generated at bootstrap into a Kubernetes Secret.
+**Secrets out of git.** Passwords come from `src/.env` or are generated at bootstrap into a Kubernetes Secret.
 
 ---
 

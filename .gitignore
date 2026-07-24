@@ -5,9 +5,9 @@
 .DS_Store
 
 # Bootstrap local state + credentials (never commit real passwords)
-/solution/.bootstrap-state
-/solution/.env
-/solution/.local/
+/src/.bootstrap-state
+/src/.env
+/src/.local/
 
 # Course / local study artifacts
 /postgres-learning/data/
