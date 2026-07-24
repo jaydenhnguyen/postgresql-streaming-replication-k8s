@@ -30,7 +30,7 @@ rel() {
   if [[ "$p" == "${REPO_ROOT}/"* ]]; then
     printf '%s' "${p#"${REPO_ROOT}/"}"
   elif [[ "$p" == "${ROOT}/"* ]]; then
-    printf 'solution/%s' "${p#"${ROOT}/"}"
+    printf 'src/%s' "${p#"${ROOT}/"}"
   else
     printf '.../%s' "$(basename "$p")"
   fi
