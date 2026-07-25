@@ -1,0 +1,70 @@
+=== evidence/02-lag-check.txt ===
+Date: 2026-07-25T16:45:11Z
+ENV_ID=hdhnguyen
+
+--- Step: streaming ---
+   state   | sync_state | replay_lsn 
+-----------+------------+------------
+ streaming | async      | 0/3446F38
+(1 row)
+
+
+--- Step: idle lag_bytes ---
+ primary_lsn | standby_replay_lsn | lag_bytes 
+-------------+--------------------+-----------
+ 0/3446F38   | 0/3446F38          |         0
+(1 row)
+
+
+--- Step: pause replay on standby ---
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+ pg_wal_replay_pause 
+---------------------
+ 
+(1 row)
+
+ pg_is_wal_replay_paused 
+-------------------------
+ t
+(1 row)
+
+
+--- Step: write load (20 inserts) ---
+inserted 20 lag-load-* rows
+
+--- Step: lag_bytes while paused (should be > idle) ---
+ primary_lsn | standby_replay_lsn | lag_bytes 
+-------------+--------------------+-----------
+ 0/3447EA0   | 0/3446F38          |      3944
+(1 row)
+
+
+--- Step: receive vs replay on standby ---
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+ receive_lsn | replay_lsn | receive_minus_replay_bytes 
+-------------+------------+----------------------------
+ 0/3447EA0   | 0/3446F38  |                       3944
+(1 row)
+
+
+--- Step: resume replay ---
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+ pg_wal_replay_resume 
+----------------------
+ 
+(1 row)
+
+ pg_is_wal_replay_paused 
+-------------------------
+ f
+(1 row)
+
+
+--- Step: lag_bytes after catch-up ---
+ primary_lsn | standby_replay_lsn | lag_bytes 
+-------------+--------------------+-----------
+ 0/3447ED8   | 0/3447ED8          |         0
+(1 row)
+
+
+End: 2026-07-25T16:45:16Z

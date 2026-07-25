@@ -1,0 +1,85 @@
+=== evidence/03-practice-promote.txt ===
+Date: 2026-07-25T16:45:27Z
+ENV_ID=hdhnguyen
+Practice: insert loop on primary while promoting (async loss demo)
+
+--- before: streaming + LSN snapshot ---
+   state   | sync_state | replay_lsn | primary_lsn | lag_bytes 
+-----------+------------+------------+-------------+-----------
+ streaming | async      | 0/3447ED8  | 0/3447ED8   |         0
+(1 row)
+
+
+--- start twist insert loop in background (Terminal B simulation) ---
+loop_pid=89789
+
+--- promote standby (while loop running) ---
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+waiting for server to promote.... done
+server promoted
+
+--- confirm pg_is_in_recovery ---
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+ pg_is_in_recovery 
+-------------------
+ f
+(1 row)
+
+
+--- stop insert loop ---
+last loop lines:
+sent twist-27
+sent twist-28
+sent twist-29
+sent twist-30
+sent twist-31
+sent≈31
+
+--- reconcile: count(*), max(id) on both ---
+promoted (former standby):
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+ count | max 
+-------+-----
+    63 |  63
+(1 row)
+
+ made_it 
+---------
+      23
+(1 row)
+
+
+old primary:
+ count | max 
+-------+-----
+    72 |  72
+(1 row)
+
+ on_old_primary 
+----------------
+             32
+(1 row)
+
+
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+summary: sent≈31 made_it=23 on_old_primary=32 lost≈8
+
+--- post-promo insert on promoted node ---
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+INSERT 0 1
+ id |         tag          
+----+----------------------
+ 67 | hdhnguyen-post-promo
+ 63 | twist-23
+ 62 | twist-22
+(3 rows)
+
+
+--- fence old primary ---
+statefulset.apps/pg-primary-hdhnguyen scaled
+NAME                     READY   STATUS        RESTARTS   AGE   IP           NODE                     NOMINATED NODE   READINESS GATES
+pg-primary-hdhnguyen-0   1/1     Terminating   0          90s   10.244.2.3   pg-replication-worker    <none>           <none>
+pg-standby-hdhnguyen-0   1/1     Running       0          56s   10.244.1.3   pg-replication-worker2   <none>           <none>
+
+End: 2026-07-25T16:45:32Z
+Note: async — rows committed on old primary after standby's last received WAL are missing on new timeline.
