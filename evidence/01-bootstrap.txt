@@ -1,0 +1,353 @@
+SUMMARY
+=======
+destroy real time : ~1.1s
+bootstrap real time: ~81s (~1.4 min)  [from /usr/bin/time -p]
+target             : < 15 minutes
+result             : streaming + 20 seed rows on standby; pods on different workers
+
+=== evidence/01-bootstrap.txt ===
+Host: Jayden-MacBook-718.local
+Date: 2026-07-25T16:43:38Z
+Command: time ./destroy.sh hdhnguyen ; time ./bootstrap.sh hdhnguyen
+
+--- destroy ---
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Loading control env vars
+└────────────────────────────────────────────────────────┘
+----
+✓ sourced src/.bootstrap-state
+STUDENT_ID=hdhnguyen
+CLUSTER_NAME=pg-replication
+GEN=.../tmp.fJmdqq5Thk
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Deleting kind cluster pg-replication
+└────────────────────────────────────────────────────────┘
+Deleting cluster "pg-replication" ...
+Deleted nodes: ["pg-replication-control-plane" "pg-replication-worker" "pg-replication-worker2"]
+----
+✓ cluster deleted
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Removing temp prepared-manifests directory
+└────────────────────────────────────────────────────────┘
+----
+✓ removed .../tmp.fJmdqq5Thk
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Removing bootstrap state file
+└────────────────────────────────────────────────────────┘
+----
+✓ removed src/.bootstrap-state
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Clearing credential env vars in this process
+└────────────────────────────────────────────────────────┘
+----
+✓ unset POSTGRES_PASSWORD REPLICATION_PASSWORD GEN
+./destroy.sh cannot clear vars in your parent shell
+.env is left alone (delete manually if you want)
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Destroy complete
+└────────────────────────────────────────────────────────┘
+Done.
+real 1.11
+user 0.05
+sys 0.06
+
+--- bootstrap (timed) ---
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Checking prerequisites
+└────────────────────────────────────────────────────────┘
+student id : hdhnguyen
+namespace  : pg-hdhnguyen
+cluster    : pg-replication
+----
+✓ tools present
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Loading credentials
+└────────────────────────────────────────────────────────┘
+----
+✓ loaded src/.env
+----
+✓ credentials ready (values not printed)
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Creating temp directory for prepared manifests
+└────────────────────────────────────────────────────────┘
+GEN=.../tmp.sOFowmZJOQ
+----
+✓ wrote src/.bootstrap-state
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Preparing manifests (fill in student id + passwords)
+└────────────────────────────────────────────────────────┘
+prepared manifests/config/configmap.yaml
+prepared manifests/config/scripts-configmap.yaml
+prepared manifests/config/secret.yaml
+prepared manifests/namespace.yaml
+prepared manifests/services/pg-primary-headless.yaml
+prepared manifests/services/pg-standby-headless.yaml
+prepared manifests/services/pg-write.yaml
+prepared manifests/statefulsets/pg-primary.yaml
+prepared manifests/statefulsets/pg-standby.yaml
+----
+✓ all manifests prepared
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Creating kind cluster
+└────────────────────────────────────────────────────────┘
+Creating cluster "pg-replication" ...
+ • Ensuring node image (kindest/node:v1.36.1) 🖼  ...
+ ✓ Ensuring node image (kindest/node:v1.36.1) 🖼
+ • Preparing nodes 📦 📦 📦   ...
+ ✓ Preparing nodes 📦 📦 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing CNI 🔌  ...
+ ✓ Installing CNI 🔌
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Joining worker nodes 🚜  ...
+ ✓ Joining worker nodes 🚜
+Set kubectl context to "kind-pg-replication"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-pg-replication
+
+Have a nice day! 👋
+----
+✓ cluster created
+Kubernetes control plane is running at https://127.0.0.1:55126
+CoreDNS is running at https://127.0.0.1:55126/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+----
+✓ kubectl context ready
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Applying namespace / ConfigMaps / Secret / Services
+└────────────────────────────────────────────────────────┘
+kubectl apply -f manifests/namespace.yaml
+namespace/pg-hdhnguyen created
+kubectl apply -f manifests/config/secret.yaml
+secret/pg-creds-hdhnguyen created
+kubectl apply -f manifests/config/configmap.yaml
+configmap/pg-config-hdhnguyen created
+kubectl apply -f manifests/config/scripts-configmap.yaml
+configmap/pg-scripts-hdhnguyen created
+kubectl apply -f manifests/services/pg-primary-headless.yaml
+service/pg-primary-hs created
+kubectl apply -f manifests/services/pg-standby-headless.yaml
+service/pg-standby-hs created
+kubectl apply -f manifests/services/pg-write.yaml
+service/pg-write created
+----
+✓ base resources applied
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Applying primary StatefulSet
+└────────────────────────────────────────────────────────┘
+kubectl apply -f manifests/statefulsets/pg-primary.yaml
+statefulset.apps/pg-primary-hdhnguyen created
+----
+✓ primary StatefulSet applied
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Waiting for primary Ready
+└────────────────────────────────────────────────────────┘
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+pod/pg-primary-hdhnguyen-0 condition met
+NAME                         READY   STATUS    RESTARTS   AGE   IP           NODE                    NOMINATED NODE   READINESS GATES
+pod/pg-primary-hdhnguyen-0   1/1     Running   0          34s   10.244.2.3   pg-replication-worker   <none>           <none>
+
+NAME                                                STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE   VOLUMEMODE
+persistentvolumeclaim/data-pg-primary-hdhnguyen-0   Bound    pvc-6db6bce9-1960-44be-950f-64d17f4df8a3   5Gi        RWO            standard       <unset>                 34s   Filesystem
+----
+✓ primary is Ready
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Ensuring the replication role 'repl' on primary DB (Task 4)
+└────────────────────────────────────────────────────────┘
+DO
+----
+✓ role repl ready
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Applying standby StatefulSet (initContainer pg_basebackup)
+└────────────────────────────────────────────────────────┘
+kubectl apply -f manifests/statefulsets/pg-standby.yaml
+statefulset.apps/pg-standby-hdhnguyen created
+----
+✓ standby StatefulSet applied
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Waiting for standby Ready
+└────────────────────────────────────────────────────────┘
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+pod/pg-standby-hdhnguyen-0 condition met
+NAME                         READY   STATUS    RESTARTS   AGE   IP           NODE                     NOMINATED NODE   READINESS GATES
+pod/pg-primary-hdhnguyen-0   1/1     Running   0          58s   10.244.2.3   pg-replication-worker    <none>           <none>
+pod/pg-standby-hdhnguyen-0   1/1     Running   0          24s   10.244.1.3   pg-replication-worker2   <none>           <none>
+
+NAME                                                STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE   VOLUMEMODE
+persistentvolumeclaim/data-pg-primary-hdhnguyen-0   Bound    pvc-6db6bce9-1960-44be-950f-64d17f4df8a3   5Gi        RWO            standard       <unset>                 58s   Filesystem
+persistentvolumeclaim/data-pg-standby-hdhnguyen-0   Bound    pvc-a82c3389-19f6-40e7-b3aa-782623089659   5Gi        RWO            standard       <unset>                 24s   Filesystem
+----
+✓ standby is Ready
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Seed (1/3) - create database clo835
+└────────────────────────────────────────────────────────┘
+CREATE DATABASE
+----
+✓ database clo835 ready
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Seed (2/3) - create table events_hdhnguyen
+└────────────────────────────────────────────────────────┘
+CREATE TABLE
+----
+✓ table events_hdhnguyen ready
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Seed (3/3) - insert ≥20 rows
+└────────────────────────────────────────────────────────┘
+INSERT 0 20
+ seed_rows 
+-----------
+        20
+(1 row)
+
+----
+✓ seed data ready
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Verifying streaming replication
+└────────────────────────────────────────────────────────┘
+primary - pg_stat_replication
+ application_name |   state   | sync_state | replay_lsn | lag_bytes 
+------------------+-----------+------------+------------+-----------
+ walreceiver      | streaming | async      | 0/3446F00  |         0
+(1 row)
+
+----
+✓ primary replication check done
+standby - recovery flag + row count
+Defaulted container "postgres" out of: postgres, pg-basebackup (init)
+ in_recovery 
+-------------
+ t
+(1 row)
+
+ events_hdhnguyen_rows 
+-----------------------
+                    20
+(1 row)
+
+----
+✓ standby check done
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Bootstrap complete
+└────────────────────────────────────────────────────────┘
+----
+✓ Namespace : pg-hdhnguyen
+----
+✓ Primary   : pg-primary-hdhnguyen-0
+----
+✓ Standby   : pg-standby-hdhnguyen-0
+GEN       : .../tmp.sOFowmZJOQ
+Secret    : pg-creds-hdhnguyen (in-cluster)
+Tear down : ./destroy.sh hdhnguyen
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Healthy cluster summary
+└────────────────────────────────────────────────────────┘
+NAME                         READY   STATUS    RESTARTS   AGE   IP           NODE                     NOMINATED NODE   READINESS GATES
+pod/pg-primary-hdhnguyen-0   1/1     Running   0          58s   10.244.2.3   pg-replication-worker    <none>           <none>
+pod/pg-standby-hdhnguyen-0   1/1     Running   0          24s   10.244.1.3   pg-replication-worker2   <none>           <none>
+
+NAME                                                STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE   VOLUMEMODE
+persistentvolumeclaim/data-pg-primary-hdhnguyen-0   Bound    pvc-6db6bce9-1960-44be-950f-64d17f4df8a3   5Gi        RWO            standard       <unset>                 58s   Filesystem
+persistentvolumeclaim/data-pg-standby-hdhnguyen-0   Bound    pvc-a82c3389-19f6-40e7-b3aa-782623089659   5Gi        RWO            standard       <unset>                 24s   Filesystem
+./bootstrap.sh: line 76: BOOTSTRAP_START: unbound variable
+----
+✓ bootstrap healthy in  (target < 15 min)
+
+┌────────────────────────────────────────────────────────┐
+│  ▶ Copy-paste commands
+└────────────────────────────────────────────────────────┘
+
+# Shell into pods
+kubectl exec -it -n pg-hdhnguyen pg-primary-hdhnguyen-0 -- bash
+kubectl exec -it -n pg-hdhnguyen pg-standby-hdhnguyen-0 -- bash
+
+# psql (inside a pod, or via kubectl exec)
+kubectl exec -it -n pg-hdhnguyen pg-primary-hdhnguyen-0 -- psql -h localhost -U postgres -d clo835
+kubectl exec -it -n pg-hdhnguyen pg-standby-hdhnguyen-0 -- psql -h localhost -U postgres -d clo835
+
+# Once already inside bash on a pod:
+psql -h localhost -U postgres -d clo835
+
+# Task 7 - streaming check
+kubectl exec -n pg-hdhnguyen pg-primary-hdhnguyen-0 -- \
+  psql -h localhost -U postgres -c "SELECT state, sync_state, replay_lsn FROM pg_stat_replication;"
+
+# Task 11 - lag check (side by side)
+echo "primary LSN:"; kubectl exec -n pg-hdhnguyen pg-primary-hdhnguyen-0 -- \
+  psql -h localhost -U postgres -Atq -c "SELECT pg_current_wal_lsn();"
+echo "standby replay LSN:"; kubectl exec -n pg-hdhnguyen pg-standby-hdhnguyen-0 -- \
+  psql -h localhost -U postgres -Atq -c "SELECT pg_last_wal_replay_lsn();"
+kubectl exec -n pg-hdhnguyen pg-primary-hdhnguyen-0 -- psql -h localhost -U postgres -c "\
+  SELECT pg_current_wal_lsn() AS primary_lsn,\
+         replay_lsn AS standby_replay_lsn,\
+         pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS lag_bytes\
+  FROM pg_stat_replication;"
+
+# Seed peek (your ID in tags)
+kubectl exec -n pg-hdhnguyen pg-primary-hdhnguyen-0 -- \
+  psql -h localhost -U postgres -d clo835 -c "SELECT * FROM events_hdhnguyen LIMIT 5;"
+
+# Tear down
+./destroy.sh hdhnguyen
+
+Done.
+real 80.98
+user 2.84
+sys 1.94
+
+--- healthy checks ---
+NAME                         READY   STATUS    RESTARTS   AGE   IP           NODE                     NOMINATED NODE   READINESS GATES
+pod/pg-primary-hdhnguyen-0   1/1     Running   0          58s   10.244.2.3   pg-replication-worker    <none>           <none>
+pod/pg-standby-hdhnguyen-0   1/1     Running   0          24s   10.244.1.3   pg-replication-worker2   <none>           <none>
+
+NAME                                                STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE   VOLUMEMODE
+persistentvolumeclaim/data-pg-primary-hdhnguyen-0   Bound    pvc-6db6bce9-1960-44be-950f-64d17f4df8a3   5Gi        RWO            standard       <unset>                 58s   Filesystem
+persistentvolumeclaim/data-pg-standby-hdhnguyen-0   Bound    pvc-a82c3389-19f6-40e7-b3aa-782623089659   5Gi        RWO            standard       <unset>                 24s   Filesystem
+
+   state   | sync_state | replay_lsn 
+-----------+------------+------------
+ streaming | async      | 0/3446F38
+(1 row)
+
+
+ id |          created_at           |        tag        |  payload   
+----+-------------------------------+-------------------+------------
+  1 | 2026-07-25 16:45:00.503207+00 | student-hdhnguyen | seed-row-1
+  2 | 2026-07-25 16:45:00.503207+00 | student-hdhnguyen | seed-row-2
+  3 | 2026-07-25 16:45:00.503207+00 | student-hdhnguyen | seed-row-3
+  4 | 2026-07-25 16:45:00.503207+00 | student-hdhnguyen | seed-row-4
+  5 | 2026-07-25 16:45:00.503207+00 | student-hdhnguyen | seed-row-5
+(5 rows)
+
+
+End: 2026-07-25T16:45:00Z
