@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${ROOT}/.." && pwd)"
 cd "$ROOT"
 
-# Task 9: student ID from $1 or STUDENT_ID (required - no silent hardcode for grading).
+# Task 9: student ID from $1 or STUDENT_ID
 if [[ -n "${1:-}" ]]; then
   STUDENT_ID="$1"
 elif [[ -n "${STUDENT_ID:-}" ]]; then
@@ -23,6 +23,7 @@ PRIMARY_POD="pg-primary-${STUDENT_ID}-0"
 STANDBY_POD="pg-standby-${STUDENT_ID}-0"
 STATE_FILE="${ROOT}/.bootstrap-state"   # non-secret paths for destroy.sh
 CREDS_FILE="${ROOT}/.env"               # local passwords (gitignored)
+BOOTSTRAP_START="$(date +%s)"           # wall-clock start for elapsed()
 
 # Print paths relative to project root (or short form for /tmp).
 rel() {
