@@ -446,6 +446,7 @@ Example:
 | 8  | [8_Standby_Initialization.md](./8_Standby_Initialization.md)                 | `standby.signal`, `primary_conninfo`, recovery mode         |
 | 9  | [9_Promotion.md](./9_Promotion.md)                                           | Promote `standby` → `primary`, prevent data loss            |
 | 10 | [10_Replication_Failure_Scenarios.md](./10_Replication_Failure_Scenarios.md) | Partition, offline, WAL removed, rebuild                    |
+| 11 | [11_Synchronous_Replication.md](./11_Synchronous_Replication.md)             | `application_name`, `synchronous_standby_names`, `FIRST 1`  |
 
 **Hands-on labs (do these):** [`../lab/README.md`](../lab/README.md) - Labs 00–12 with observation logs, outcomes, and project-demo mapping.
 

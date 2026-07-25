@@ -53,7 +53,7 @@ alias sx='docker exec -it standby-db  psql -U prPostgres -d testDB'
 | [07](./07_Slot_vs_No_Slot_Failure.md) | Slot vs no-slot failure | Why slots prevent "WAL removed" | 6, 10 |
 | [08](./08_Network_Partition.md) | Network partition | Disconnect, catch-up, slot protects | 10 |
 | [09](./09_WAL_Removed_Rebuild.md) | WAL removed → rebuild | Re-seed with `pg_basebackup` | 7, 10 |
-| [10](./10_Sync_vs_Async_Commit.md) | Sync vs async commit | Durability vs availability tradeoff | 9, 4 |
+| [10](./10_Sync_vs_Async_Commit.md) | Sync vs async commit | Durability vs availability tradeoff | 11, 9, 4 |
 | [11](./11_Promotion_and_Row_Reconciliation.md) | Promotion + row count | Promote under load, explain lost rows | 9, 4 |
 | [12](./12_Failure_Diagnosis_Drill.md) | Failure diagnosis drill | Capstone: diagnose without looking up | 10 |
 

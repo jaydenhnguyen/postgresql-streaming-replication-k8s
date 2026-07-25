@@ -126,12 +126,15 @@ solution is about **when** the commit is allowed to return - or about containing
 
 ### Strategy 1 - Synchronous replication (zero loss of acknowledged commits)
 
-Make the `primary` **wait for the `standby`** before returning COMMIT:
+Make the `primary` **wait for the `standby`** before returning COMMIT.
+
+Full walkthrough of `application_name`, `synchronous_standby_names`, `FIRST 1`, and why
+`synchronous_commit = on` alone is not enough: **[11_Synchronous_Replication.md](./11_Synchronous_Replication.md)**.
 
 ```
 # postgresql.conf on primary
-synchronous_standby_names = 'standby1'   # or application_name of the standby
-synchronous_commit = on                  # wait until standby has flushed WAL
+synchronous_standby_names = 'FIRST 1 (standby1)'   # must match standby application_name
+synchronous_commit = on                            # wait until that standby has flushed WAL
 ```
 
 ```
@@ -276,11 +279,12 @@ Production automation?               → Patroni / CloudNativePG (6)
 ```
 
 👉 For **this project** (async by design, so you can *demonstrate* loss):
-1. Show the LSN gap under write load
+1. Show the LSN gap under a write load
 2. Promote mid-burst
 3. State exact counts: made it / lost / why (replay LSN cut line)
-4. Explain: `synchronous_commit = on` would have made loss **zero**, but the insert loop would **block** if the 
-   `standby` lagged or died
+4. Explain: sync replication (`synchronous_standby_names` + `synchronous_commit`) would have made loss of
+   **acked** commits **zero**, but the insert loop would **block** if the `standby` lagged or died
+   ([11_Synchronous_Replication.md](./11_Synchronous_Replication.md))
 5. Repoint `pg-write` and prove the new `primary` accepts writes
 
 ---
@@ -336,6 +340,7 @@ confirm.
 
 - [8_Standby_Initialization.md](./8_Standby_Initialization.md) - recovery mode, `standby.signal`, `pg_is_in_recovery()`
 - [4_LSN.md](./4_LSN.md) - row-loss accounting, sync vs async solutions
+- [11_Synchronous_Replication.md](./11_Synchronous_Replication.md) - `application_name`, `FIRST 1`, sync settings
 - [6_Replication_Slots.md](./6_Replication_Slots.md) - keeping WAL for the `standby`
 - [PostgreSQL Documentation - Failover](https://www.postgresql.org/docs/current/warm-standby-failover.html)
 - [PostgreSQL Documentation - pg_promote](https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-RECOVERY-CONTROL)
