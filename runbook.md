@@ -42,10 +42,23 @@ cp .env.example .env
 ./bootstrap.sh ${ENV_ID}
 ```
 
-Healthy afterward:
+Healthy afterward — pods/PVCs up, and one streaming standby:
 
 ```shell
 kubectl get pods,pvc -n ${NS} -o wide
+
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -c \
+  "SELECT state, sync_state, replay_lsn FROM pg_stat_replication;"
+```
+
+**Expected output:** both Postgres pods `Running` (on different workers), PVCs `Bound`, and:
+
+```text
+   state   | sync_state | replay_lsn
+-----------+------------+------------
+ streaming | async      | 0/........
+(1 row)
 ```
 
 ---
@@ -546,7 +559,7 @@ kubectl exec -n ${NS} ${STANDBY} -- \
 
 **Expected output:** INSERT succeeds. The latest tag is `${ENV_ID}-post-promo`.
 
-The old primary is still writable until you fence it
+The old primary is still writable until you fence it (Step 14).
 
 ---
 
@@ -597,9 +610,49 @@ If `psql` asks for a password, use `POSTGRES_PASSWORD` from `src/.env`.
 
 ---
 
-### Step 13 - Fence the old primary (Terminal A)
+### Step 13 - Reconcile rows (Terminal A)
 
-Stops the old primary from accepting writes (avoids two primaries / split-brain).
+On the new primary (promoted standby):
+
+```bash
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*), max(id) FROM events_${ENV_ID};"
+```
+
+On the old primary (still running until Step 14):
+
+```bash
+kubectl exec -n ${NS} ${PRIMARY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*), max(id) FROM events_${ENV_ID};"
+```
+
+**Expected output:** Two numbers per side (`count`, `max(id)`). If the old primary was ahead at promote time, its `count` / `max(id)` can be higher than the promoted node.
+
+Optional — tagged `pre-promo-*` check from this section's practice path:
+
+```bash
+kubectl exec -n ${NS} ${STANDBY} -- \
+  psql -h localhost -U postgres -d clo835 -c \
+  "SELECT count(*) FILTER (WHERE tag LIKE 'pre-promo-%') AS standby_pre_promo_count
+   FROM events_${ENV_ID};"
+```
+
+Then calculate (practice path):
+
+- `sent` = `30` (from Step 4)
+- `made_it` = `standby_pre_promo_count`
+- `lost` = `sent - made_it` → usually `0` here, because promote applied the received WAL
+
+`lost > 0` when commits were still **only on the old primary** (not yet received by the standby) at promote
+time - compare the two `count(*)` / `max(id)` results above, or count the instructor's tag on each side.
+
+---
+
+### Step 14 - Fence the old primary (Terminal A)
+
+Stops the old primary from accepting writes (avoids two primaries / split-brain). Do this **after** reconcile so both pods are still queryable in Step 13.
 
 ```bash
 kubectl scale statefulset pg-primary-${ENV_ID} -n ${NS} --replicas=0
@@ -612,32 +665,6 @@ kubectl get pods -n ${NS} -o wide
 ```
 
 **Expected output:** Only the promoted standby pod is `Running`. Old primary is gone or `Terminating`.
-
----
-
-### Step 14 - Reconcile rows (Terminal A)
-
-On the promoted node (same check as Step 8, kept here for the demo narrative):
-
-```bash
-kubectl exec -n ${NS} ${STANDBY} -- \
-  psql -h localhost -U postgres -d clo835 -c \
-  "SELECT count(*) AS total,
-          count(*) FILTER (WHERE tag LIKE 'pre-promo-%') AS standby_pre_promo_count
-   FROM events_${ENV_ID};"
-```
-
-**Expected output (pause + promote path above):** `standby_pre_promo_count` = `30`.
-
-Then calculate:
-
-- `sent` = `30` (from Step 4)
-- `made_it` = `standby_pre_promo_count`
-- `lost` = `sent - made_it` → usually `0` here, because promote applied the received WAL
-
-`lost > 0` only for commits that were still **only on the old primary** (not yet received by the standby) when
-promote ran - e.g. an instructor write loop still inserting at the promoted moment. That is different from
-"paused but already received" WAL, which promote does apply.
 
 ---
 
