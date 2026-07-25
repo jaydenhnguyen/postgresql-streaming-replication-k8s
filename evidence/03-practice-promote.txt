@@ -1,7 +1,7 @@
 === evidence/03-practice-promote.txt ===
-Date: 2026-07-25T16:45:27Z
+Date: 2026-07-25T17:04:34Z
 ENV_ID=hdhnguyen
-Practice: insert loop on primary while promoting (async loss demo)
+Practice: Method A pg_ctl promote while insert loop runs (async loss demo)
 
 --- before: streaming + LSN snapshot ---
    state   | sync_state | replay_lsn | primary_lsn | lag_bytes 
@@ -10,10 +10,10 @@ Practice: insert loop on primary while promoting (async loss demo)
 (1 row)
 
 
---- start twist insert loop in background (Terminal B simulation) ---
-loop_pid=89789
+--- start twist insert loop in background ---
+loop_pid=94434
 
---- promote standby (while loop running) ---
+--- Method A: pg_ctl promote (while loop running) ---
 Defaulted container "postgres" out of: postgres, pg-basebackup (init)
 waiting for server to promote.... done
 server promoted
@@ -40,12 +40,12 @@ promoted (former standby):
 Defaulted container "postgres" out of: postgres, pg-basebackup (init)
  count | max 
 -------+-----
-    63 |  63
+    62 |  62
 (1 row)
 
  made_it 
 ---------
-      23
+      22
 (1 row)
 
 
@@ -62,7 +62,7 @@ old primary:
 
 
 Defaulted container "postgres" out of: postgres, pg-basebackup (init)
-summary: sent≈31 made_it=23 on_old_primary=32 lost≈8
+summary: sent≈31 made_it=22 on_old_primary=32 lost≈9
 
 --- post-promo insert on promoted node ---
 Defaulted container "postgres" out of: postgres, pg-basebackup (init)
@@ -70,16 +70,18 @@ INSERT 0 1
  id |         tag          
 ----+----------------------
  67 | hdhnguyen-post-promo
- 63 | twist-23
  62 | twist-22
+ 61 | twist-21
 (3 rows)
 
 
+--- note: Method B (pg_promote / promote_trigger_file) requires a fresh rebuild; see runbook.md Step 6 ---
+
 --- fence old primary ---
 statefulset.apps/pg-primary-hdhnguyen scaled
-NAME                     READY   STATUS        RESTARTS   AGE   IP           NODE                     NOMINATED NODE   READINESS GATES
-pg-primary-hdhnguyen-0   1/1     Terminating   0          90s   10.244.2.3   pg-replication-worker    <none>           <none>
-pg-standby-hdhnguyen-0   1/1     Running       0          56s   10.244.1.3   pg-replication-worker2   <none>           <none>
+NAME                     READY   STATUS        RESTARTS   AGE    IP           NODE                     NOMINATED NODE   READINESS GATES
+pg-primary-hdhnguyen-0   1/1     Terminating   0          101s   10.244.1.3   pg-replication-worker    <none>           <none>
+pg-standby-hdhnguyen-0   1/1     Running       0          65s    10.244.2.3   pg-replication-worker2   <none>           <none>
 
-End: 2026-07-25T16:45:32Z
+End: 2026-07-25T17:04:39Z
 Note: async — rows committed on old primary after standby's last received WAL are missing on new timeline.

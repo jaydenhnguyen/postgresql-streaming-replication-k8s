@@ -13,7 +13,7 @@ you can rebuild anytime.
 - Bootstrapping stateful Postgres on Kubernetes (StatefulSets, headless Services, Secrets, PVCs)
 - How physical streaming replication looks in practice (`pg_stat_replication`, LSNs, byte lag)
 - Why a hot standby is read-only until promotion
-- Failover: `pg_ctl promote` / `pg_promote()`, then repointing a writing Service
+- Failover: `pg_ctl promote` and the trigger-file alternative (`promote_trigger_file` / `pg_promote()`), then repointing a writing Service
 - Accounting for rows that async replication can lose across a promoted window
 - Idempotent destroy + rebuild of a local kind environment
 
@@ -480,7 +480,11 @@ kubectl exec -n ${NS} ${STANDBY} -- \
 
 ### Step 6 - Promote the standby (Terminal A)
 
-Method A (`pg_ctl promote`):
+PDF requires **two** promotion methods in the runbook. Use **one** live; know both for the oral.
+
+---
+
+#### Method A - `pg_ctl promote` (usual demo path)
 
 ```bash
 kubectl exec -n ${NS} ${STANDBY} -- gosu postgres pg_ctl promote -D ${PGDATA}
@@ -492,7 +496,15 @@ waiting for server to promote.... done
 server promoted
 ```
 
-Method B (alternative - try once on a rebuild):
+`gosu postgres` is required: `pg_ctl` refuses to run as root inside the official image.
+
+---
+
+#### Method B - trigger-file alternative (`promote_trigger_file` / `pg_promote()`)
+
+Same end state as Method A (`pg_is_in_recovery()` → `f`). Do **not** run Method A and Method B on the same already-promoted pod — rebuild first (`./destroy.sh` + `./bootstrap.sh`) if you want to practice both.
+
+**B1 - `SELECT pg_promote()`** (SQL; works with no ConfigMap change):
 
 ```bash
 kubectl exec -n ${NS} ${STANDBY} -- \
@@ -500,7 +512,28 @@ kubectl exec -n ${NS} ${STANDBY} -- \
   "SELECT pg_promote();"
 ```
 
-**Expected output:** `t` (promote requested). Pod name and K8s labels stay `role: standby`.
+**Expected output:** `t` (promote requested).
+
+**B2 - `promote_trigger_file`** (create a trigger file on disk).  
+`promote_trigger_file` is read at server start, so set it, restart the standby once, then `touch` the file:
+
+```bash
+# 1) Persist the setting into PGDATA (survives until rebuild)
+kubectl exec -n ${NS} ${STANDBY} -- gosu postgres bash -c \
+  "grep -q '^promote_trigger_file' ${PGDATA}/postgresql.auto.conf 2>/dev/null \
+   || echo \"promote_trigger_file = '${PGDATA}/promote.trigger'\" >> ${PGDATA}/postgresql.auto.conf"
+
+# 2) Restart standby so Postgres picks up promote_trigger_file
+kubectl delete pod ${STANDBY} -n ${NS}
+kubectl wait --for=condition=Ready pod/${STANDBY} -n ${NS} --timeout=300s
+
+# 3) Create the trigger file → standby promotes
+kubectl exec -n ${NS} ${STANDBY} -- gosu postgres touch ${PGDATA}/promote.trigger
+```
+
+**Expected output:** After step 3, `SELECT pg_is_in_recovery();` returns `f` (confirm in Step 7).
+
+`pg_promote()` and `promote_trigger_file` are the same family of promote: end recovery without using `pg_ctl`. Pod name and K8s labels stay `role: standby`.
 
 Promote ends the replay pause and applies already-received WAL **before** the node becomes read-write.
 

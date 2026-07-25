@@ -1,5 +1,5 @@
 === evidence/02-lag-check.txt ===
-Date: 2026-07-25T16:45:11Z
+Date: 2026-07-25T17:04:18Z
 ENV_ID=hdhnguyen
 
 --- Step: streaming ---
@@ -63,8 +63,8 @@ Defaulted container "postgres" out of: postgres, pg-basebackup (init)
 --- Step: lag_bytes after catch-up ---
  primary_lsn | standby_replay_lsn | lag_bytes 
 -------------+--------------------+-----------
- 0/3447ED8   | 0/3447ED8          |         0
+ 0/3447EA0   | 0/3447EA0          |         0
 (1 row)
 
 
-End: 2026-07-25T16:45:16Z
+End: 2026-07-25T17:04:24Z
