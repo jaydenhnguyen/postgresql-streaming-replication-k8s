@@ -6,6 +6,10 @@ resource "aws_instance" "kind_host" {
   key_name                    = var.key_name
   associate_public_ip_address = true
 
+  # Shell user-data (#!/bin/bash) — see user_data.sh
+  user_data                   = file("${path.module}/user_data.sh")
+  user_data_replace_on_change = true
+
   root_block_device {
     volume_size           = var.root_volume_size
     volume_type           = var.root_volume_type
