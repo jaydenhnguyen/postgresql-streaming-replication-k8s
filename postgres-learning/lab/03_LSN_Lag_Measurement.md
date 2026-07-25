@@ -1,4 +1,4 @@
-# Lab 03 — LSN Lag Measurement
+# Lab 03 - LSN Lag Measurement
 
 **Goal:** Measure replication lag in bytes with the three LSN functions and `pg_stat_replication`.
 
@@ -48,7 +48,7 @@ SQL
 | Lag bytes (`primary` → `replay_lsn`) | |
 | Non-zero when idle? (yes/no + why) | |
 
-### 2. Write burst — watch lag move
+### 2. Write burst - watch lag move
 
 Terminal A (load):
 
@@ -107,7 +107,7 @@ Practice saying:
 
 ## Takeaway
 
-> LSN lag is a **byte distance** on the WAL tape, not a row count — but at promotion time that byte gap is exactly the committed work the standby has not replayed.
+> LSN lag is a **byte distance** on the WAL tape, not a row count - but at promotion time that byte gap is exactly the committed work the standby has not replayed.
 
 
 

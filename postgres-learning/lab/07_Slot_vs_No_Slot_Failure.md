@@ -1,4 +1,4 @@
-# Lab 07 — Slot vs No-Slot Failure
+# Lab 07 - Slot vs No-Slot Failure
 
 **Goal:** Prove why a physical slot (or enough retained WAL) matters when the `standby` is offline under write load.
 
@@ -8,7 +8,7 @@
 
 ---
 
-## Part A — With a slot (safe offline)
+## Part A - With a slot (safe offline)
 
 ### A1. Confirm slot in use
 
@@ -51,7 +51,7 @@ docker exec -it standby-db \
 
 ---
 
-## Part B — Without a slot (can break)
+## Part B - Without a slot (can break)
 
 Only do this if you are ready to rebuild (Lab 09). Use a **temporary** second approach: drop the slot **while standby is stopped**, generate enough WAL that recycling can remove needed segments, then start standby.
 

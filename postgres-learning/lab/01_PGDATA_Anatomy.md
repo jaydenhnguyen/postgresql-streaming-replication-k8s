@@ -1,4 +1,4 @@
-# Lab 01 — PGDATA Anatomy Tour
+# Lab 01 - PGDATA Anatomy Tour
 
 **Goal:** Map the live cluster on disk and name the processes that make replication work.
 

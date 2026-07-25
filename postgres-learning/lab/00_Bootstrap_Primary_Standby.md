@@ -1,4 +1,4 @@
-# Lab 00 — Bootstrap Primary + Standby
+# Lab 00 - Bootstrap Primary + Standby
 
 **Goal:** From a clean machine, bring up a streaming pair: writable `primary`, read-only `standby`, proven replication.
 
@@ -37,10 +37,10 @@ docker exec -it primary-db \
   psql -U prPostgres -d testDB -c "SELECT version(); SELECT pg_is_in_recovery();"
 ```
 
-| Observation | Your value | Expected |
-|-------------|------------|----------|
-| `pg_is_in_recovery()` | | `f` |
-| Version string contains | | `PostgreSQL 18` |
+| Observation             | Your value | Expected        |
+|-------------------------|------------|-----------------|
+| `pg_is_in_recovery()`   |            | `f`             |
+| Version string contains |            | `PostgreSQL 18` |
 
 ### 2. Configure replication on `primary`
 
@@ -77,12 +77,12 @@ SELECT rolname, rolreplication FROM pg_roles WHERE rolname = 'repl';
 SQL
 ```
 
-| Observation | Your value | Expected |
-|-------------|------------|----------|
-| `wal_level` | | `replica` |
-| `rolreplication` for `repl` | | `t` |
+| Observation                 | Your value | Expected  |
+|-----------------------------|------------|-----------|
+| `wal_level`                 |            | `replica` |
+| `rolreplication` for `repl` |            | `t`       |
 
-### 3. Create physical slot
+### 3. Create a physical slot
 
 ```bash
 docker exec -it primary-db \
@@ -92,10 +92,10 @@ SELECT slot_name, slot_type, active, restart_lsn FROM pg_replication_slots;
 SQL
 ```
 
-| Observation | Your value | Expected |
-|-------------|------------|----------|
-| Slot exists | | `standby1_slot`, `physical` |
-| `active` before standby starts | | `f` |
+| Observation                    | Your value | Expected                    |
+|--------------------------------|------------|-----------------------------|
+| Slot exists                    |            | `standby1_slot`, `physical` |
+| `active` before standby starts |            | `f`                         |
 
 ### 4. Seed `standby` with `pg_basebackup`
 
@@ -122,11 +122,11 @@ test -f ./data/standby/18/docker/standby.signal && echo "standby.signal OK"
 grep primary_conninfo ./data/standby/18/docker/postgresql.auto.conf
 ```
 
-| Observation | Your value | Expected |
-|-------------|------------|----------|
-| `standby.signal` present? | | yes |
-| `primary_conninfo` hosts | | `primary-db`, user `repl` |
-| Why `-R` matters (one line) | | |
+| Observation                 | Your value | Expected                  |
+|-----------------------------|------------|---------------------------|
+| `standby.signal` present?   |            | yes                       |
+| `primary_conninfo` hosts    |            | `primary-db`, user `repl` |
+| Why `-R` matters (one line) |            |                           |
 
 ### 5. Start `standby` and prove read-only
 
@@ -142,10 +142,10 @@ docker exec -it standby-db \
   -c "CREATE TABLE should_fail (id int);"
 ```
 
-| Observation | Your value | Expected |
-|-------------|------------|----------|
-| `pg_is_in_recovery()` | | `t` |
-| Write error message | | read-only / recovery |
+| Observation           | Your value | Expected             |
+|-----------------------|------------|----------------------|
+| `pg_is_in_recovery()` |            | `t`                  |
+| Write error message   |            | read-only / recovery |
 
 ### 6. Prove streaming + data
 
@@ -170,11 +170,11 @@ docker exec -it standby-db \
   psql -U prPostgres -d testDB -c "SELECT count(*) FROM events;"
 ```
 
-| Observation | Your value | Expected |
-|-------------|------------|----------|
-| `pg_stat_replication.state` | | `streaming` |
-| Row count primary | | `20` (or more if re-run) |
-| Row count standby | | same as primary |
+| Observation                 | Your value | Expected                 |
+|-----------------------------|------------|--------------------------|
+| `pg_stat_replication.state` |            | `streaming`              |
+| Row count primary           |            | `20` (or more if re-run) |
+| Row count standby           |            | same as primary          |
 
 ---
 
@@ -197,10 +197,10 @@ docker exec -it standby-db \
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| `pg_basebackup` auth failed | Re-check `repl` role + `pg_hba` + restart |
+| Symptom                     | Fix                                              |
+|-----------------------------|--------------------------------------------------|
+| `pg_basebackup` auth failed | Re-check `repl` role + `pg_hba` + restart        |
 | Empty `pg_stat_replication` | Standby logs, `standby.signal`, network `pg-net` |
-| Port in use | Free `:5432`/`:5433` or change compose ports |
+| Port in use                 | Free `:5432`/`:5433` or change compose ports     |
 
 Next: [01_PGDATA_Anatomy.md](./01_PGDATA_Anatomy.md)

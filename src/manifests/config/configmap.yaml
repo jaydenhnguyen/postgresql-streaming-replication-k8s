@@ -32,7 +32,7 @@ data:
     host          replication     all             127.0.0.1/32            trust
     host          replication     all              ::1/128                trust
 
-    # Pod network — app connections + streaming replication
+    # Pod network - app connections + streaming replication
     # (kind CNI is typically 10.244.0.0/16 but 0.0.0.0/0 is fine)
     host          all             all              0.0.0.0/0              trust
     host          replication     repl             0.0.0.0/0           scram-sha-256

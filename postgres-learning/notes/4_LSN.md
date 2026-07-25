@@ -374,7 +374,8 @@ prevent that: [9_Promotion.md](./9_Promotion.md).
 A nonzero replay gap means asynchronous promotion may lose acknowledged writes. This note's job is to **measure and 
 explain** that; the **prevention strategies** live in the promotion note:
 
-- Synchronous replication (`synchronous_commit`) - zero loss of acked commits, but COMMIT blocks if the `standby` is down
+- Synchronous replication (`synchronous_standby_names` + `synchronous_commit`) - zero loss of acked commits, but COMMIT 
+blocks if the sync `standby` is down. Details: [11_Synchronous_Replication.md](./11_Synchronous_Replication.md)
 - Promote only when lag ≈ 0 (planned failovers)
 - Quorum `standbys`, replication slots, fencing the old `primary` (split-brain), HA automation
 

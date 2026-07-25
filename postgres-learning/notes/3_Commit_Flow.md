@@ -276,7 +276,7 @@ into its `base/` files. That gap is exactly what matters during promotion and ro
 
 ## References
 
-- [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md) — processes, `PGDATA`, `base/`
-- [2_WAL.md](./2_WAL.md) — WAL segments, lifecycle, crash recovery
-- [5_Checkpoint.md](./5_Checkpoint.md) — checkpoint flush and cut-point LSN
-- [PostgreSQL Documentation — WAL](https://www.postgresql.org/docs/current/wal-intro.html)
+- [1_PostgreSQL_Architecture.md](./1_PostgreSQL_Architecture.md) - processes, `PGDATA`, `base/`
+- [2_WAL.md](./2_WAL.md) - WAL segments, lifecycle, crash recovery
+- [5_Checkpoint.md](./5_Checkpoint.md) - checkpoint flush and cut-point LSN
+- [PostgreSQL Documentation - WAL](https://www.postgresql.org/docs/current/wal-intro.html)

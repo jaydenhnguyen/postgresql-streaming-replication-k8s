@@ -81,10 +81,10 @@ if command -v kind >/dev/null 2>&1; then
     kind delete cluster --name "${CLUSTER_NAME}"
     ok "cluster deleted"
   else
-    warn "cluster ${CLUSTER_NAME} not found — skip"
+    warn "cluster ${CLUSTER_NAME} not found - skip"
   fi
 else
-  warn "kind not installed — skip cluster delete"
+  warn "kind not installed - skip cluster delete"
 fi
 
 step "Removing temp prepared-manifests directory"

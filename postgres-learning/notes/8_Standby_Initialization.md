@@ -81,12 +81,12 @@ A connection string telling the `standby` **how to reach the `primary`** for str
 primary_conninfo = 'host=pg-primary-0.pg-primary-hs port=5432 user=repl password=... application_name=standby1'
 ```
 
-| Part               | Meaning                                                                               |
-|--------------------|---------------------------------------------------------------------------------------|
-| `host` / `port`    | Where the `primary` listens (in Kubernetes: the **stable headless-Service DNS name**) |
-| `user`             | The replication role (`repl`) - same one `pg_basebackup` used                         |
-| `password`         | Its password (can also come from `~/.pgpass` or environment)                          |
-| `application_name` | How this `standby` shows up in `pg_stat_replication` on the `primary`                 |
+| Part               | Meaning                                                                                                                                                                                                                     |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `host` / `port`    | Where the `primary` listens (in Kubernetes: the **stable headless-Service DNS name**)                                                                                                                                       |
+| `user`             | The replication role (`repl`) - same one `pg_basebackup` used                                                                                                                                                               |
+| `password`         | Its password (can also come from `~/.pgpass` or environment)                                                                                                                                                                |
+| `application_name` | How this `standby` shows up in `pg_stat_replication` on the `primary`. Use a **unique** name per standby when you have more than one (required for sync: [11_Synchronous_Replication.md](./11_Synchronous_Replication.md)). |
 
 ### Who uses it
 
