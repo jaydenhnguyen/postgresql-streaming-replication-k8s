@@ -18,7 +18,7 @@ Practice bringing up asymmetric Postgres roles on Kubernetes from a clean host, 
 - ConfigMaps / Secrets for `postgresql.conf`, `pg_hba.conf`, and credentials
 - Idempotent standby seeding with `pg_basebackup -R -X stream` in an initContainer
 - Reading replication health (`pg_stat_replication`, LSNs, `pg_wal_lsn_diff`)
-- Failover with `pg_ctl promote` / `pg_promote()`, then patching a write Service
+- Failover with `pg_ctl promote`, `pg_promote()`, or a `promote_trigger_file`, then patching a write Service
 - Tear-down and rebuild of a local kind environment
 
 Day-2 commands live in [runbook.md](runbook.md).
@@ -36,11 +36,12 @@ Day-2 commands live in [runbook.md](runbook.md).
 | **Standby StatefulSet** | Seeded by an idempotent `pg_basebackup` initContainer; read-only until promoted |
 | **Headless Services**   | Stable DNS for replication (`pg-primary-…-0.pg-primary-hs`, …)                  |
 | **`pg-write` Service**  | ClusterIP clients use for writes; selector updated after failover               |
-| **ConfigMap**           | `wal_level`, `max_wal_senders`, `pg_hba`, plus the basebackup script            |
+| **ConfigMaps**          | Postgres settings (`wal_level`, `max_wal_senders`, `pg_hba`) and basebackup script |
 | **Secret**              | Passwords created at bootstrap - never committed to git                         |
 
 Storage: kind default `standard` (`local-path`) via `volumeClaimTemplates` - one PVC per pod.  
-Image: official [`postgres:18`](https://hub.docker.com/_/postgres) with `PGDATA=/var/lib/postgresql/18/docker`.
+Image: official [`postgres:18`](https://hub.docker.com/_/postgres) with `PGDATA=/var/lib/postgresql/18/docker`.  
+Placement: workers labeled `postgres-node=node-a|node-b` in `kind-config.yaml`; StatefulSets use `nodeSelector`.
 
 ```text
 Clients --> pg-write (ClusterIP)
@@ -69,7 +70,7 @@ Clients --> pg-write (ClusterIP)
 
 ## Quick start
 
-**Prerequisites:** Docker, [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/), `envsubst` (gettext)
+**Prerequisites:** Docker, [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/), `envsubst` (gettext), and `openssl`.
 
 Optional shell shortcuts (typing only - not part of the cluster):
 
@@ -84,6 +85,7 @@ export STANDBY=pg-standby-${ENV_ID}-0
 cd src
 cp .env.example .env   # optional; edit passwords or skip for random
 ./bootstrap.sh ${ENV_ID}
+# or: STUDENT_ID=${ENV_ID} ./bootstrap.sh
 
 kubectl get pods,pvc -n ${NS} -o wide
 
@@ -94,7 +96,7 @@ kubectl exec -n ${NS} ${PRIMARY} -- \
 
 Expect both pods `Running` on different nodes and one `streaming` row in `pg_stat_replication`.
 
-Tear down:
+Tear down (from `src/`):
 
 ```bash
 ./destroy.sh ${ENV_ID}
@@ -110,7 +112,8 @@ Full ops path (lag, load, promote, cutover, rebuild): [runbook.md](runbook.md).
 .
 ├── README.md
 ├── runbook.md              # copy-paste day-2 procedures
-├── assets/                 # architecture diagram (optional)
+├── evidence/               # sample dry-run transcripts (bootstrap, lag, promote)
+├── assets/                 # architecture diagram
 └── src/
     ├── kind-config.yaml    # 1 control-plane + 2 labeled workers
     ├── bootstrap.sh        # kind + apply + seed + verify
@@ -121,17 +124,17 @@ Full ops path (lag, load, promote, cutover, rebuild): [runbook.md](runbook.md).
     │   ├── config/         # Secret template, postgres config, basebackup script
     │   ├── services/       # headless + pg-write
     │   └── statefulsets/   # primary + standby
-    └── remote_infra/       # optional Terraform for a remote kind host
+    └── remote_infra/       # optional Terraform + user-data for a remote kind host
 ```
 
-Namespace, object names, and seed table/rows are derived from the `ENV_ID` passed to bootstrap (for example `pg-hdhnguyen`, `events_hdhnguyen`).
+Namespace, object names, and seed table/rows are derived from the ID passed to bootstrap (for example `pg-hdhnguyen`, `events_hdhnguyen`). Bootstrap takes that ID as `$1` or `STUDENT_ID`.
 
 ---
 
 ## How it works
 
-1. **Bootstrap** creates a kind cluster, fills manifests with `ENV_ID` and passwords (`envsubst`), applies them, waits for the primary, ensures the `repl` role, starts the standby (initContainer runs `pg_basebackup`), seeds database `clo835` / table `events_<ENV_ID>`, and checks streaming.
-2. **Standby init** skips `pg_basebackup` if PGDATA already has cluster files, so pod restarts reuse the PVC instead of re-copying.
+1. **Bootstrap** creates a kind cluster, fills manifests with the student/env ID and passwords (`envsubst`), applies them, waits for the primary, ensures the `repl` role, starts the standby (initContainer runs `pg_basebackup`), seeds database `clo835` / table `events_<ID>`, and checks streaming.
+2. **Standby init** skips `pg_basebackup` if PGDATA already has cluster files (`PG_VERSION` or `standby.signal`), so pod restarts reuse the PVC instead of re-copying.
 3. **Clients** write through `pg-write`. After promote, patch the Service selector to the former standby labels and scale down the old primary to avoid split-brain.
 4. **Async replication** means commits past the standby replay LSN at promote time may be missing on the new timeline - the runbook shows how to measure that with LSNs and row counts.
 
